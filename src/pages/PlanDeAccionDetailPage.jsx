@@ -74,6 +74,8 @@ const PlanDeAccionDetailPage = () => {
         setEvidenceFile(e.target.files[0]);
     };
 
+    // src/pages/PlanDeAccionDetailPage.jsx
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!formData.responsable || !formData.fechaCompromiso || !formData.accionesRecomendadas) {
@@ -81,13 +83,15 @@ const PlanDeAccionDetailPage = () => {
             return;
         }
         setIsSaving(true);
+        const toastId = toast.loading("Guardando plan de acción...");
+        
         try {
-            let newEvidence = null;
+            let evidenciasFinales = actionPlan?.evidencias || [];
+
             if (evidenceFile) {
-                toast.loading("Subiendo evidencia...");
-                const path = `action-plans/${resultadoId}/${evidenceFile.name}`;
-                newEvidence = await firebaseServices.uploadFile(evidenceFile, path);
-                toast.dismiss();
+                const path = `action-plans/${resultadoId}/${Date.now()}_${evidenceFile.name}`;
+                const newEvidence = await firebaseServices.uploadFile(evidenceFile, path);
+                evidenciasFinales.push(newEvidence);
             }
             
             const planData = {
@@ -96,19 +100,19 @@ const PlanDeAccionDetailPage = () => {
                 resultadoId: resultadoId,
                 auditoriaId: ncDetail.auditoriaId,
                 requisitoId: ncDetail.requisitoId,
-                evidencias: actionPlan?.evidencias || [],
+                evidencias: evidenciasFinales,
                 actualizadoEn: serverTimestamp()
             };
-            
-            if (newEvidence) {
-                planData.evidencias.push(newEvidence);
-            }
 
+            console.log("Datos a guardar en Firestore (Plan de Acción):", planData);
             await firebaseServices.saveActionPlan(planData, actionPlan?.id);
+            
+            toast.success("Plan de acción guardado con éxito.", { id: toastId });
             navigate('/planes-de-accion');
+
         } catch (error) {
-            toast.error("Error al guardar el plan de acción.");
-            console.error(error);
+            toast.error("Error al guardar el plan de acción.", { id: toastId });
+            console.error("Error detallado en handleSubmit (Plan de Acción):", error);
         } finally {
             setIsSaving(false);
         }
