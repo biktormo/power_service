@@ -1,4 +1,4 @@
-// src/pages/AuditPage.jsx (Versión con Depuración Profunda)
+// src/pages/AuditPage.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -6,12 +6,14 @@ import { firebaseServices } from '../firebase/services.js';
 import { toast } from 'react-hot-toast';
 import Modal from '../components/Modal.jsx';
 import RequirementModalContent from './RequirementModalContent.jsx';
+import { useData } from '../contexts/DataContext.jsx'; // Importamos el hook de datos
 
 const AuditPage = () => {
     const { auditId } = useParams();
     const navigate = useNavigate();
+    const { refreshData } = useData(); // Obtenemos la función para refrescar los datos globales
     
-    // Estados
+    // Estados para los datos y la UI
     const [auditDetails, setAuditDetails] = useState(null);
     const [pilares, setPilares] = useState([]);
     const [estandares, setEstandares] = useState([]);
@@ -24,7 +26,7 @@ const AuditPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRequisito, setCurrentRequisito] = useState(null);
 
-    // Lógica de carga de datos
+    // Carga inicial de datos
     useEffect(() => {
         const loadInitialData = async () => {
             setLoading(true);
@@ -45,6 +47,7 @@ const AuditPage = () => {
         loadInitialData();
     }, [auditId]);
 
+    // Carga de estándares y requisitos en cascada
     useEffect(() => {
         if (selectedPilar) {
             firebaseServices.getChecklistData(['checklist', selectedPilar, 'estandares']).then(est => {
@@ -61,6 +64,7 @@ const AuditPage = () => {
         }
     }, [selectedEstandar]);
     
+    // Memoización para calcular elementos completados
     const auditedCounts = useMemo(() => {
         if (!fullChecklist || !results) return { pilares: new Set(), estandares: new Set() };
         const pilarResultsCount = {}, estandarResultsCount = {};
@@ -82,7 +86,7 @@ const AuditPage = () => {
         return { pilares: completedPilares, estandares: completedEstandares };
     }, [fullChecklist, results]);
 
-    // Handler de clic (simple y directo)
+    // --- LÓGICA DE HANDLERS (ACTUALIZADA) ---
     const handleRequisitoClick = (req) => {
         if (auditDetails?.estado === 'cerrada') {
             toast.error('Esta auditoría está cerrada y no se puede editar.');
@@ -96,13 +100,19 @@ const AuditPage = () => {
 
     const handleSaveResult = async (data, existingResult) => {
         await firebaseServices.saveRequirementResult(data, existingResult);
+        
+        // Actualizamos el estado local para que el cambio visual sea instantáneo
         setResults(prev => ({ ...prev, [data.requisitoId]: data }));
+        
+        // Llamamos a la función del DataContext para actualizar los datos globales en segundo plano
+        await refreshData(); 
     };
 
     const handleFinalizeAudit = async () => {
         if (window.confirm("¿Estás seguro de que deseas cerrar esta auditoría? No podrás realizar más cambios.")) {
             try {
                 await firebaseServices.closeAudit(auditId);
+                await refreshData(); // Refrescamos los datos después de cerrar
                 toast.success("Auditoría cerrada con éxito.");
                 navigate('/audits/panel');
             } catch (error) { 

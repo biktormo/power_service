@@ -1,7 +1,8 @@
 // src/contexts/DataContext.jsx
-import React, { useState, useEffect, useContext, createContext } from 'react';
+import React, { useState, useEffect, useContext, createContext, useCallback } from 'react';
 import { firebaseServices } from '../firebase/services';
 import { useAuth } from './AuthContext';
+import { toast } from 'react-hot-toast';
 
 const DataContext = createContext();
 
@@ -10,57 +11,56 @@ export const useData = () => {
 };
 
 export const DataProvider = ({ children }) => {
-    const { user } = useAuth(); // Dependemos del usuario para saber cuándo cargar datos
+    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [audits, setAudits] = useState([]);
     const [actionPlans, setActionPlans] = useState([]);
     const [fullChecklist, setFullChecklist] = useState({});
     const [totalRequisitos, setTotalRequisitos] = useState(0);
 
-    useEffect(() => {
-        // Solo cargamos los datos si hay un usuario logueado
-        if (user) {
-            setLoading(true);
-            // Usamos Promise.all para hacer todas las peticiones a la vez
-            Promise.all([
+    // --- ESTA ES LA NUEVA LÓGICA DE CARGA ---
+    const fetchData = useCallback(async () => {
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        try {
+            const [auditsData, plansData, checklistData] = await Promise.all([
                 firebaseServices.getAllAuditsWithResults(),
                 firebaseServices.getAllActionPlans(),
                 firebaseServices.getFullChecklist()
-            ]).then(([auditsData, plansData, checklistData]) => {
-                setAudits(auditsData);
-                setActionPlans(plansData);
-                setFullChecklist(checklistData);
+            ]);
+            
+            setAudits(auditsData);
+            setActionPlans(plansData);
+            setFullChecklist(checklistData);
 
-                // Calculamos el total de requisitos una sola vez
-                let count = 0;
-                Object.values(checklistData).forEach(pilar => {
-                    Object.values(pilar.estandares).forEach(estandar => {
-                        count += estandar.requisitos.length;
-                    });
-                });
-                setTotalRequisitos(count);
-
-                setLoading(false);
-            }).catch(error => {
-                console.error("Error fatal al cargar los datos iniciales:", error);
-                setLoading(false);
+            let count = 0;
+            Object.values(checklistData).forEach(pilar => {
+                Object.values(pilar.estandares).forEach(estandar => { count += estandar.requisitos.length; });
             });
-        } else {
-            // Si no hay usuario, reseteamos los datos
-            setAudits([]);
-            setActionPlans([]);
-            setFullChecklist({});
-            setTotalRequisitos(0);
+            setTotalRequisitos(count);
+
+        } catch (error) {
+            toast.error("Error al cargar los datos de la aplicación.");
+            console.error("Error en DataProvider:", error);
+        } finally {
             setLoading(false);
         }
-    }, [user]); // Este efecto se ejecuta de nuevo si el usuario cambia (login/logout)
+    }, [user]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const value = {
         loading,
         audits,
         actionPlans,
         fullChecklist,
-        totalRequisitos
+        totalRequisitos,
+        refreshData: fetchData // <-- Exponemos la función para recargar
     };
 
     return (
