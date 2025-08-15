@@ -25,10 +25,8 @@ const RequirementModalContent = ({ requisito, onSave, onClose, auditId, existing
         }
         setIsSaving(true);
         const toastId = toast.loading("Guardando...");
-
         try {
             let adjuntosFinales = existingResult?.adjuntos || [];
-
             if (foto) {
                 const path = `audits/${auditId}/${requisito.id}/foto_${Date.now()}_${foto.name}`;
                 const fotoData = await firebaseServices.uploadFile(foto, path);
@@ -38,19 +36,18 @@ const RequirementModalContent = ({ requisito, onSave, onClose, auditId, existing
                 if (existingFotoIndex > -1) adjuntosFinales[existingFotoIndex] = fotoParaGuardar;
                 else adjuntosFinales.push(fotoParaGuardar);
             }
-
             if (adjunto) {
                 const path = `audits/${auditId}/${requisito.id}/adjunto_${Date.now()}_${adjunto.name}`;
                 const adjuntoData = await firebaseServices.uploadFile(adjunto, path);
                 const adjuntoParaGuardar = { ...adjuntoData, type: 'adjunto' };
-
+    
                 const existingAdjuntoIndex = adjuntosFinales.findIndex(a => a.type === 'adjunto');
                 if (existingAdjuntoIndex > -1) adjuntosFinales[existingAdjuntoIndex] = adjuntoParaGuardar;
                 else adjuntosFinales.push(adjuntoParaGuardar);
             }
             
             const dataToSave = {
-                auditoriaId,
+                auditId: auditId, // Se usa 'auditId'
                 requisitoId: requisito.id,
                 pilarId: requisito.pilarId,
                 estandarId: requisito.estandarId,
@@ -60,12 +57,9 @@ const RequirementModalContent = ({ requisito, onSave, onClose, auditId, existing
                 fechaResultado: serverTimestamp(),
             };
             
-            console.log("Datos a guardar en Firestore (Resultado):", dataToSave);
             await firebaseServices.saveRequirementResult(dataToSave, existingResult);
-            
             toast.success("Resultado guardado con éxito.", { id: toastId });
             onClose();
-
         } catch (error) {
             toast.error("Error al guardar el resultado.", { id: toastId });
             console.error("Error detallado en handleSave:", error);
