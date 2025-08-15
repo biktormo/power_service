@@ -10,6 +10,7 @@ import { ThemeProvider } from './contexts/ThemeContext.jsx';
 
 import './index.css';
 import './App.css';
+import { DataProvider } from './contexts/DataContext.jsx';
 
 // Registrar Service Worker (si quieres mantener la funcionalidad PWA)
 if ('serviceWorker' in navigator) {
@@ -23,7 +24,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
+          <DataProvider>
             <App />
+          </DataProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

@@ -1,11 +1,11 @@
 # netlify.toml
 
-# Configuración de construcción (esto asegura que todo esté correcto)
+# Configuración de construcción para asegurar que Netlify use Vite correctamente
 [build]
   command = "npm run build"
   publish = "dist"
 
-# Regla de redirección para Single Page Applications (SPA)
+# Regla de redirección para que TODAS las rutas sean manejadas por index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
