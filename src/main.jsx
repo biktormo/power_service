@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
+import { DataProvider } from './contexts/DataContext.jsx';
 
 import './index.css';
 
@@ -22,7 +23,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <App />
+          <DataProvider> {/* <-- ENVUELVE LA APP AQUÍ */}
+            <App />
+          </DataProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

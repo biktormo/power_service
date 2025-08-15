@@ -1,39 +1,15 @@
 // src/pages/AuditsPanelPage.jsx
-import React, { useState, useEffect } from 'react';
+
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { firebaseServices } from '../firebase/services';
-import { toast } from 'react-hot-toast';
+import { useData } from '../contexts/DataContext.jsx'; // Importamos el hook del nuevo contexto
 
 const AuditsPanelPage = () => {
-    const [audits, setAudits] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [totalRequisitos, setTotalRequisitos] = useState(0);
+    // Obtenemos los datos y el estado de carga directamente del DataContext
+    const { audits, totalRequisitos, loading } = useData(); 
     const navigate = useNavigate();
 
-    useEffect(() => {
-        const fetchAuditsAndData = async () => {
-            setLoading(true);
-            try {
-                const allAudits = await firebaseServices.getAllAuditsWithResults();
-                setAudits(allAudits);
-
-                const checklist = await firebaseServices.getFullChecklist();
-                let count = 0;
-                Object.values(checklist).forEach(pilar => {
-                    Object.values(pilar.estandares).forEach(estandar => {
-                        count += estandar.requisitos.length;
-                    });
-                });
-                setTotalRequisitos(count);
-            } catch (error) {
-                toast.error("No se pudieron cargar las auditorías.");
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchAuditsAndData();
-    }, []);
+    // Ya no necesitamos el useEffect para cargar datos aquí
 
     const getAuditedPilares = (resultados) => {
         if (!resultados || resultados.length === 0) return 'Ninguno';
@@ -41,7 +17,10 @@ const AuditsPanelPage = () => {
         return pilares.join(', ');
     };
 
-    if (loading) return <div className="loading-spinner">Cargando panel...</div>;
+    // Usamos el estado de carga global del DataContext
+    if (loading) {
+        return <div className="loading-spinner">Cargando datos de auditorías...</div>;
+    }
 
     return (
         <div className="audits-panel-container">
