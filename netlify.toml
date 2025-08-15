@@ -1,0 +1,12 @@
+# netlify.toml
+
+# Configuración de construcción (esto asegura que todo esté correcto)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Regla de redirección para Single Page Applications (SPA)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
