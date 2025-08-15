@@ -97,21 +97,15 @@ const AuditPage = () => {
 
     const handleCloseModal = () => setIsModalOpen(false);
 
-    // --- FUNCIÓN DE GUARDADO CON RECARGA FORZADA ---
     const handleSaveResult = async (data, existingResult) => {
-        const toastId = toast.loading("Guardando resultado...");
         try {
             await firebaseServices.saveRequirementResult(data, existingResult);
-            toast.success("Resultado guardado con éxito. Actualizando...", { id: toastId });
-            
-            // Esperamos un momento para que el usuario vea el mensaje de éxito
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000); // 1 segundo de espera
-
+            // Actualizamos el estado local para la respuesta visual.
+            // Esto asegura que la UI se actualice inmediatamente.
+            setResults(prev => ({ ...prev, [data.requisitoId]: data }));
         } catch (error) {
-            toast.error("Error al guardar el resultado.", { id: toastId });
             console.error("Error en handleSaveResult:", error);
+            toast.error("No se pudo guardar el resultado.");
         }
     };
 
@@ -129,7 +123,8 @@ const AuditPage = () => {
     };
 
     const handleSaveAndExit = () => {
-        toast.success("Progreso guardado.");
+        // No hay nada que guardar aquí, la acción de guardar ocurre en el modal.
+        // Simplemente navegamos al panel.
         navigate('/audits/panel');
     };
 
@@ -145,7 +140,7 @@ const AuditPage = () => {
                     </div>
                     {auditDetails?.estado === 'abierta' && (
                         <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button onClick={handleSaveAndExit} className="btn btn-secondary">Guardar y Salir</button>
+                            <button onClick={handleSaveAndExit} className="btn btn-secondary">Panel de Auditorías</button>
                             <button onClick={handleFinalizeAudit} className="btn btn-danger">Finalizar Auditoría</button>
                         </div>
                     )}
