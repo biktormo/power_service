@@ -41,6 +41,7 @@ const DashboardPage = () => {
                 setPilaresList(pilares);
             } catch (error) {
                 toast.error("Error al cargar los datos del dashboard.");
+                console.error(error);
             } finally {
                 setLoading(false);
             }
@@ -61,10 +62,10 @@ const DashboardPage = () => {
         loadRequisitos();
     }, [selectedPilar, fullChecklist]);
 
-    // --- CÁLCULOS MEMOIZADOS PARA LOS GRÁFICOS ---
+    // --- CÁLCULOS MEMOIZADOS PARA LOS GRÁFICOS (ACTUALIZADOS) ---
 
     const stats = useMemo(() => {
-        const resultCounts = { C: 0, NC: 0, NO: 0 };
+        const resultCounts = { C: 0, NC: 0, NO: 0, "NC Cerrada": 0 };
         allResults.forEach(r => { if (resultCounts[r.resultado] !== undefined) resultCounts[r.resultado]++; });
         
         const planCounts = { pendiente: 0, en_progreso: 0, completado: 0 };
@@ -78,7 +79,7 @@ const DashboardPage = () => {
         const audit = allAudits.find(a => a.id === selectedAuditId);
         if (!audit || audit.resultados.length === 0) return [];
         
-        const counts = { C: 0, NC: 0, NO: 0 };
+        const counts = { C: 0, NC: 0, NO: 0, "NC Cerrada": 0 };
         audit.resultados.forEach(r => { if (counts[r.resultado] !== undefined) counts[r.resultado]++; });
         
         const total = audit.resultados.length;
@@ -102,14 +103,15 @@ const DashboardPage = () => {
                 C: r.resultado === 'C' ? 1 : 0,
                 NC: r.resultado === 'NC' ? 1 : 0,
                 NO: r.resultado === 'NO' ? 1 : 0,
+                "NC Cerrada": r.resultado === 'NC Cerrada' ? 1 : 0,
             }));
     }, [selectedRequisito, selectedPeriod, allResults]);
 
     const branchComparisonData = useMemo(() => {
         const data = {
-            Charata: { name: 'Charata', C: 0, NC: 0, NO: 0 },
-            Bandera: { name: 'Bandera', C: 0, NC: 0, NO: 0 },
-            Quimili: { name: 'Quimili', C: 0, NC: 0, NO: 0 },
+            Charata: { name: 'Charata', C: 0, NC: 0, NO: 0, "NC Cerrada": 0 },
+            Bandera: { name: 'Bandera', C: 0, NC: 0, NO: 0, "NC Cerrada": 0 },
+            Quimili: { name: 'Quimili', C: 0, NC: 0, NO: 0, "NC Cerrada": 0 },
         };
         allResults.forEach(r => {
             if (data[r.lugar] && data[r.lugar][r.resultado] !== undefined) {
@@ -119,7 +121,7 @@ const DashboardPage = () => {
         return Object.values(data);
     }, [allResults]);
 
-    const COLORS = { C: 'var(--success-color)', NC: 'var(--danger-color)', NO: 'var(--warning-color)' };
+    const COLORS = { C: 'var(--success-color)', NC: 'var(--danger-color)', NO: 'var(--warning-color)', "NC Cerrada": '#00C49F' };
     const selectedAuditForExport = allAudits.find(a => a.id === selectedAuditId);
 
     if (loading) return <div className="loading-spinner">Cargando dashboard...</div>;
@@ -131,32 +133,21 @@ const DashboardPage = () => {
             <div className="dashboard-section">
                 <h3>Resumen General</h3>
                 <div className="stats-grid">
+                    <div className="stat-card"><h4>Conformes (C)</h4><div className="value C">{stats.C}</div></div>
+                    <div className="stat-card"><h4>No Conformes (NC)</h4><div className="value NC">{stats.NC}</div></div>
+                    <div className="stat-card"><h4>No Observados (NO)</h4><div className="value NO">{stats.NO}</div></div>
                     <div className="stat-card">
-                        <h4>Conformes (C)</h4>
-                        <div className="value C">{stats.C}</div>
+                        <h4>NC Cerradas</h4>
+                        <div className="value" style={{ color: COLORS["NC Cerrada"] }}>{stats["NC Cerrada"]}</div>
                     </div>
-                    <div className="stat-card">
-                        <h4>No Conformes (NC)</h4>
-                        <div className="value NC">{stats.NC}</div>
-                    </div>
-                    <div className="stat-card">
-                        <h4>No Observados (NO)</h4>
-                        <div className="value NO">{stats.NO}</div>
-                    </div>
+                </div>
+                 <div className="stats-grid" style={{marginTop: '1rem'}}>
                     <div className="stat-card card-link" onClick={() => navigate('/planes-de-accion')}>
                         <h4>Planes Pendientes</h4>
                         <div className="value" style={{ color: 'var(--warning-color)' }}>{stats.pendiente}</div>
                     </div>
-                </div>
-                <div className="stats-grid" style={{marginTop: '1rem'}}>
-                    <div className="stat-card">
-                        <h4>Planes en Progreso</h4>
-                        <div className="value" style={{ color: 'var(--primary-color)' }}>{stats.en_progreso}</div>
-                    </div>
-                    <div className="stat-card">
-                        <h4>Planes Completados</h4>
-                        <div className="value C">{stats.completado}</div>
-                    </div>
+                    <div className="stat-card"><h4>Planes en Progreso</h4><div className="value" style={{ color: 'var(--primary-color)' }}>{stats.en_progreso}</div></div>
+                    <div className="stat-card"><h4>Planes Completados</h4><div className="value C">{stats.completado}</div></div>
                 </div>
             </div>
 
@@ -176,7 +167,7 @@ const DashboardPage = () => {
                 </div>
                 <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
-                        <Pie data={auditPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percentage }) => `${name}: ${percentage}%`}>
+                        <Pie data={auditPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, value, percentage }) => `${name}: ${value} (${percentage}%)`}>
                             {auditPieData.map((entry) => <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} />)}
                         </Pie>
                         <Tooltip formatter={(value, name, props) => `${value} (${props.payload.percentage}%)`} />
@@ -194,14 +185,14 @@ const DashboardPage = () => {
                         <select value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)}><option value="6m">Últimos 6 meses</option><option value="1y">Último año</option></select>
                     </div>
                     <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={requirementHistoryData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /></BarChart>
+                        <BarChart data={requirementHistoryData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /><Bar dataKey="NC Cerrada" stackId="a" fill={COLORS["NC Cerrada"]} name="NC Cerrada" /></BarChart>
                     </ResponsiveContainer>
                 </div>
 
                 <div className="dashboard-section">
                     <h3>Comparativa por Sucursal</h3>
                     <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={branchComparisonData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /></BarChart>
+                        <BarChart data={branchComparisonData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /><Bar dataKey="NC Cerrada" stackId="a" fill={COLORS["NC Cerrada"]} name="NC Cerrada" /></BarChart>
                     </ResponsiveContainer>
                 </div>
             </div>

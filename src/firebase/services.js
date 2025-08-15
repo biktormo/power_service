@@ -162,6 +162,17 @@ export const firebaseServices = {
         }
     },
 
+    // Dentro de src/firebase/services.js
+
+    closeNonConformity: async (resultadoId) => {
+        const resultRef = doc(db, 'resultados', resultadoId);
+        await updateDoc(resultRef, {
+            resultado: 'NC Cerrada', // <-- CAMBIO CLAVE
+            comentarios: `NC cerrada. Ver plan de acción asociado. - ${new Date().toLocaleDateString()}`
+        });
+        toast.success("No Conformidad cerrada con éxito.");
+    },
+
     getSingleRequirement: async (pilarId, estandarId, requisitoId) => {
         if (!pilarId || !estandarId || !requisitoId) return null;
         const docRef = doc(db, 'checklist', pilarId, 'estandares', estandarId, 'requisitos', requisitoId);
