@@ -98,14 +98,19 @@ const AuditPage = () => {
     const handleCloseModal = () => setIsModalOpen(false);
 
     const handleSaveResult = async (data, existingResult) => {
+        const toastId = toast.loading("Guardando resultado...");
         try {
             await firebaseServices.saveRequirementResult(data, existingResult);
-            // Actualizamos el estado local para la respuesta visual.
-            // Esto asegura que la UI se actualice inmediatamente.
-            setResults(prev => ({ ...prev, [data.requisitoId]: data }));
+            toast.success("Resultado guardado con éxito. Actualizando...", { id: toastId });
+            
+            // Forzamos una recarga completa de la página después de un breve retraso.
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000); // 1 segundo de espera
+    
         } catch (error) {
+            toast.error("Error al guardar el resultado.", { id: toastId });
             console.error("Error en handleSaveResult:", error);
-            toast.error("No se pudo guardar el resultado.");
         }
     };
 

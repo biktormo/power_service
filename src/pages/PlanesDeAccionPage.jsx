@@ -70,13 +70,13 @@ const PlanesDeAccionPage = () => {
             <div className="audits-panel-container">
                 <h1>Panel de Planes de Acción</h1>
                 <div className="card">
-                    <div className="form-group">
-                        <label htmlFor="audit-select">Selecciona una Auditoría para ver sus No Conformidades</label>
-                        <select
-                            id="audit-select"
-                            value={selectedAudit?.id || ''}
-                            onChange={handleAuditChange}
-                            disabled={loading}
+                <div className="form-group">
+                    <label htmlFor="audit-select">Selecciona una Auditoría para ver sus No Conformidades</label>
+                    <select
+                        id="audit-select" // <-- AÑADE ESTE ID
+                        value={selectedAudit?.id || ''}
+                        onChange={handleAuditChange}
+                        disabled={loading}
                         >
                             <option value="">-- Elige una auditoría --</option>
                             {audits.map(audit => (
