@@ -6,12 +6,11 @@ import { firebaseServices } from '../firebase/services.js';
 import { toast } from 'react-hot-toast';
 import Modal from '../components/Modal.jsx';
 import RequirementModalContent from './RequirementModalContent.jsx';
-import { useData } from '../contexts/DataContext.jsx'; // Importamos el hook de datos
+import ProtectedRoute from '../components/ProtectedRoute.jsx';
 
 const AuditPage = () => {
     const { auditId } = useParams();
     const navigate = useNavigate();
-    const { refreshData } = useData(); // Obtenemos la función para refrescar los datos globales
     
     // Estados para los datos y la UI
     const [auditDetails, setAuditDetails] = useState(null);
@@ -26,7 +25,7 @@ const AuditPage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRequisito, setCurrentRequisito] = useState(null);
 
-    // Carga inicial de datos
+    // Carga inicial de datos, independiente del DataContext
     useEffect(() => {
         const loadInitialData = async () => {
             setLoading(true);
@@ -86,7 +85,7 @@ const AuditPage = () => {
         return { pilares: completedPilares, estandares: completedEstandares };
     }, [fullChecklist, results]);
 
-    // --- LÓGICA DE HANDLERS (ACTUALIZADA) ---
+    // Lógica de handlers
     const handleRequisitoClick = (req) => {
         if (auditDetails?.estado === 'cerrada') {
             toast.error('Esta auditoría está cerrada y no se puede editar.');
@@ -100,19 +99,14 @@ const AuditPage = () => {
 
     const handleSaveResult = async (data, existingResult) => {
         await firebaseServices.saveRequirementResult(data, existingResult);
-        
-        // Actualizamos el estado local para que el cambio visual sea instantáneo
+        // Actualizamos solo el estado local para la respuesta visual
         setResults(prev => ({ ...prev, [data.requisitoId]: data }));
-        
-        // Llamamos a la función del DataContext para actualizar los datos globales en segundo plano
-        await refreshData(); 
     };
 
     const handleFinalizeAudit = async () => {
         if (window.confirm("¿Estás seguro de que deseas cerrar esta auditoría? No podrás realizar más cambios.")) {
             try {
                 await firebaseServices.closeAudit(auditId);
-                await refreshData(); // Refrescamos los datos después de cerrar
                 toast.success("Auditoría cerrada con éxito.");
                 navigate('/audits/panel');
             } catch (error) { 
@@ -130,77 +124,79 @@ const AuditPage = () => {
     if (loading) return <div className="loading-spinner">Cargando auditoría...</div>;
 
     return (
-        <div className="audit-page-container">
-            <div className="audit-page-header">
-                <div>
-                    <h1>Auditoría: {auditDetails?.numeroAuditoria}</h1>
-                    <p><strong>Lugar:</strong> {auditDetails?.lugar} | <strong>Auditores:</strong> {auditDetails?.auditores?.join(', ')} | <strong>Auditados:</strong> {auditDetails?.auditados?.join(', ')}</p>
-                </div>
-                {auditDetails?.estado === 'abierta' && (
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button onClick={handleSaveAndExit} className="btn btn-secondary">Guardar y Salir</button>
-                        <button onClick={handleFinalizeAudit} className="btn btn-danger">Finalizar Auditoría</button>
+        <ProtectedRoute allowedRoles={['administrador', 'auditor']}>
+            <div className="audit-page-container">
+                <div className="audit-page-header">
+                    <div>
+                        <h1>Auditoría: {auditDetails?.numeroAuditoria}</h1>
+                        <p><strong>Lugar:</strong> {auditDetails?.lugar} | <strong>Auditores:</strong> {auditDetails?.auditores?.join(', ')} | <strong>Auditados:</strong> {auditDetails?.auditados?.join(', ')}</p>
                     </div>
-                )}
-            </div>
-
-            <div className="filters-container card">
-                <div className="form-group">
-                    <label>1. Seleccionar Pilar</label>
-                    <select value={selectedPilar} onChange={e => setSelectedPilar(e.target.value)}>
-                        <option value="">-- Elige un pilar --</option>
-                        {pilares.map(p => (
-                            <option key={p.id} value={p.docId} className={auditedCounts.pilares.has(p.id) ? 'option-audited' : ''}>
-                                {p.nombre} ({p.id})
-                            </option>
-                        ))}
-                    </select>
+                    {auditDetails?.estado === 'abierta' && (
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button onClick={handleSaveAndExit} className="btn btn-secondary">Guardar y Salir</button>
+                            <button onClick={handleFinalizeAudit} className="btn btn-danger">Finalizar Auditoría</button>
+                        </div>
+                    )}
                 </div>
-                {selectedPilar && (
+
+                <div className="filters-container card">
                     <div className="form-group">
-                        <label>2. Seleccionar Estándar</label>
-                        <select value={selectedEstandar} onChange={e => setSelectedEstandar(e.target.value)}>
-                            <option value="">-- Elige un estándar --</option>
-                            {estandares.map(e => (
-                                <option key={e.id} value={e.docId} className={auditedCounts.estandares.has(e.id) ? 'option-audited' : ''}>
-                                    {e.id} - {e.descripcion}
+                        <label>1. Seleccionar Pilar</label>
+                        <select value={selectedPilar} onChange={e => setSelectedPilar(e.target.value)}>
+                            <option value="">-- Elige un pilar --</option>
+                            {pilares.map(p => (
+                                <option key={p.id} value={p.docId} className={auditedCounts.pilares.has(p.id) ? 'option-audited' : ''}>
+                                    {p.nombre} ({p.id})
                                 </option>
                             ))}
                         </select>
                     </div>
+                    {selectedPilar && (
+                        <div className="form-group">
+                            <label>2. Seleccionar Estándar</label>
+                            <select value={selectedEstandar} onChange={e => setSelectedEstandar(e.target.value)}>
+                                <option value="">-- Elige un estándar --</option>
+                                {estandares.map(e => (
+                                    <option key={e.id} value={e.docId} className={auditedCounts.estandares.has(e.id) ? 'option-audited' : ''}>
+                                        {e.id} - {e.descripcion}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                {requisitos.length > 0 && (
+                    <div className="requisito-list-container">
+                        <h3>Requisitos</h3>
+                        <ul className="requisito-list">
+                            {requisitos.map(req => (
+                                <li 
+                                    key={req.id} 
+                                    className={`requisito-item status-${results[req.id]?.resultado || ''}`} 
+                                    onClick={() => handleRequisitoClick(req)}
+                                >
+                                    <span><strong>{req.id}</strong> - {req.requerimientoOperacional.substring(0, 100)}...</span>
+                                    <span>{results[req.id]?.resultado || 'Pendiente'}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                
+                {isModalOpen && currentRequisito && (
+                    <Modal onClose={handleCloseModal}>
+                        <RequirementModalContent
+                            requisito={currentRequisito}
+                            onSave={handleSaveResult}
+                            onClose={handleCloseModal}
+                            auditId={auditId}
+                            existingResult={results[currentRequisito.id]}
+                        />
+                    </Modal>
                 )}
             </div>
-
-            {requisitos.length > 0 && (
-                <div className="requisito-list-container">
-                    <h3>Requisitos</h3>
-                    <ul className="requisito-list">
-                        {requisitos.map(req => (
-                            <li 
-                                key={req.id} 
-                                className={`requisito-item status-${results[req.id]?.resultado || ''}`} 
-                                onClick={() => handleRequisitoClick(req)}
-                            >
-                                <span><strong>{req.id}</strong> - {req.requerimientoOperacional.substring(0, 100)}...</span>
-                                <span>{results[req.id]?.resultado || 'Pendiente'}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-            
-            {isModalOpen && currentRequisito && (
-                <Modal onClose={handleCloseModal}>
-                    <RequirementModalContent
-                        requisito={currentRequisito}
-                        onSave={handleSaveResult}
-                        onClose={handleCloseModal}
-                        auditId={auditId}
-                        existingResult={results[currentRequisito.id]}
-                    />
-                </Modal>
-            )}
-        </div>
+        </ProtectedRoute>
     );
 };
 
