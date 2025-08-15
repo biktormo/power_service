@@ -1,10 +1,10 @@
 // src/pages/PlanDeAccionDetailPage.jsx
-
 import React, { useState, useEffect } from 'react';
+import { serverTimestamp } from 'firebase/firestore';
 import { useParams, useNavigate } from 'react-router-dom';
 import { firebaseServices } from '../firebase/services';
+import ProtectedRoute from '../components/ProtectedRoute';
 import { toast } from 'react-hot-toast';
-import { serverTimestamp } from 'firebase/firestore';
 
 const PlanDeAccionDetailPage = () => {
     const { resultadoId } = useParams();
@@ -12,7 +12,6 @@ const PlanDeAccionDetailPage = () => {
 
     const [loading, setLoading] = useState(true);
     const [ncDetail, setNcDetail] = useState(null);
-    const [requirementText, setRequirementText] = useState('');
     const [actionPlan, setActionPlan] = useState(null);
     
     const [formData, setFormData] = useState({
@@ -26,27 +25,17 @@ const PlanDeAccionDetailPage = () => {
 
     useEffect(() => {
         const loadData = async () => {
-            setLoading(true);
             try {
-                // 1. Obtenemos el resultado del NC
-                const ncData = await firebaseServices.getSingleResult(resultadoId);
+                const ncData = await firebaseServices.getSingleResult(resultadoId); // Necesitarás añadir getSingleResult a services
+                const planData = await firebaseServices.getActionPlan(resultadoId);
+                
                 if (!ncData) {
                     toast.error("No Conformidad no encontrada.");
                     navigate('/planes-de-accion');
                     return;
                 }
-                setNcDetail(ncData);
 
-                // 2. Usando los IDs del NC, buscamos el texto completo del requerimiento
-                if (ncData.pilarId && ncData.estandarId && ncData.requisitoId) {
-                    const reqData = await firebaseServices.getSingleRequirement(ncData.pilarId, ncData.estandarId, ncData.requisitoId);
-                    if (reqData) {
-                        setRequirementText(reqData.requerimientoOperacional);
-                    }
-                }
-                
-                // 3. Buscamos si ya existe un plan de acción
-                const planData = await firebaseServices.getActionPlan(resultadoId);
+                setNcDetail(ncData);
                 if (planData) {
                     setActionPlan(planData);
                     setFormData({
@@ -58,7 +47,6 @@ const PlanDeAccionDetailPage = () => {
                 }
             } catch (error) {
                 toast.error("Error al cargar los datos del plan.");
-                console.error(error);
             } finally {
                 setLoading(false);
             }
@@ -88,7 +76,6 @@ const PlanDeAccionDetailPage = () => {
                 toast.loading("Subiendo evidencia...");
                 const path = `action-plans/${resultadoId}/${evidenceFile.name}`;
                 newEvidence = await firebaseServices.uploadFile(evidenceFile, path);
-                toast.dismiss();
             }
             
             const planData = {
@@ -111,6 +98,7 @@ const PlanDeAccionDetailPage = () => {
             toast.error("Error al guardar el plan de acción.");
             console.error(error);
         } finally {
+            toast.dismiss();
             setIsSaving(false);
         }
     };
@@ -118,58 +106,60 @@ const PlanDeAccionDetailPage = () => {
     if (loading) return <div className="loading-spinner">Cargando Plan de Acción...</div>;
 
     return (
-        <div className="new-audit-container">
-            <h1>Plan de Acción para NC: {ncDetail?.requisitoId}</h1>
-            
-            <div className="card" style={{ marginBottom: '2rem' }}>
-                <h3>Detalle de la No Conformidad</h3>
-                <p><strong>Requerimiento:</strong> {requirementText}</p>
-                <p><strong>Comentarios de Auditoría:</strong> <em>"{ncDetail?.comentarios}"</em></p>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="card">
-                <h3>Gestionar Plan de Acción</h3>
-                <div className="form-group">
-                    <label htmlFor="responsable">Responsable</label>
-                    <input type="text" id="responsable" name="responsable" value={formData.responsable} onChange={handleChange} required />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="fechaCompromiso">Fecha de Compromiso</label>
-                    <input type="date" id="fechaCompromiso" name="fechaCompromiso" value={formData.fechaCompromiso} onChange={handleChange} required />
-                </div>
-                <div className="form-group">
-                    <label htmlFor="accionesRecomendadas">Acciones Recomendadas</label>
-                    <textarea id="accionesRecomendadas" name="accionesRecomendadas" value={formData.accionesRecomendadas} onChange={handleChange} rows="4" required></textarea>
-                </div>
-                <div className="form-group">
-                    <label htmlFor="estado">Estado</label>
-                    <select id="estado" name="estado" value={formData.estado} onChange={handleChange}>
-                        <option value="pendiente">Pendiente</option>
-                        <option value="en_progreso">En Progreso</option>
-                        <option value="completado">Completado</option>
-                    </select>
-                </div>
-                <div className="form-group">
-                    <label htmlFor="evidenceFile">Adjuntar Nueva Evidencia</label>
-                    <input type="file" id="evidenceFile" name="evidenceFile" onChange={handleFileChange} />
-                </div>
-
-                {actionPlan?.evidencias?.length > 0 && (
-                    <div>
-                        <h4>Evidencias Adjuntas</h4>
-                        <ul>
-                            {actionPlan.evidencias.map((ev, index) => (
-                                <li key={index}><a href={ev.url} target="_blank" rel="noopener noreferrer">{ev.name}</a></li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
+        <ProtectedRoute allowedRoles={['administrador', 'auditor', 'colaborador']}>
+            <div className="new-audit-container">
+                <h1>Plan de Acción para NC: {ncDetail?.requisitoId}</h1>
                 
-                <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isSaving}>
-                    {isSaving ? 'Guardando...' : 'Guardar Plan de Acción'}
-                </button>
-            </form>
-        </div>
+                <div className="card" style={{ marginBottom: '2rem' }}>
+                    <h3>Detalle de la No Conformidad</h3>
+                    <p><strong>Requerimiento:</strong> {ncDetail?.requerimientoOperacional}</p>
+                    <p><strong>Comentarios de Auditoría:</strong> <em>"{ncDetail?.comentarios}"</em></p>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="card">
+                    <h3>Gestionar Plan de Acción</h3>
+                    <div className="form-group">
+                        <label htmlFor="responsable">Responsable</label>
+                        <input type="text" name="responsable" value={formData.responsable} onChange={handleChange} required />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="fechaCompromiso">Fecha de Compromiso</label>
+                        <input type="date" name="fechaCompromiso" value={formData.fechaCompromiso} onChange={handleChange} required />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="accionesRecomendadas">Acciones Recomendadas</label>
+                        <textarea name="accionesRecomendadas" value={formData.accionesRecomendadas} onChange={handleChange} rows="4" required></textarea>
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="estado">Estado</label>
+                        <select name="estado" value={formData.estado} onChange={handleChange}>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="en_progreso">En Progreso</option>
+                            <option value="completado">Completado</option>
+                        </select>
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="evidenceFile">Adjuntar Nueva Evidencia</label>
+                        <input type="file" name="evidenceFile" onChange={handleFileChange} />
+                    </div>
+
+                    {actionPlan?.evidencias?.length > 0 && (
+                        <div>
+                            <h4>Evidencias Adjuntas</h4>
+                            <ul>
+                                {actionPlan.evidencias.map((ev, index) => (
+                                    <li key={index}><a href={ev.url} target="_blank" rel="noopener noreferrer">{ev.name}</a></li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    
+                    <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isSaving}>
+                        {isSaving ? 'Guardando...' : 'Guardar Plan de Acción'}
+                    </button>
+                </form>
+            </div>
+        </ProtectedRoute>
     );
 };
 
