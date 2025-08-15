@@ -110,13 +110,25 @@ export const firebaseServices = {
 
     // --- FUNCIONES DE RESULTADOS DE AUDITORÍA ---
     saveRequirementResult: async (data, existingResult) => {
-        if (existingResult) {
-            const resultRef = doc(db, 'resultados', existingResult.id);
-            await setDoc(resultRef, data, { merge: true });
-            toast.success("Resultado actualizado");
-        } else {
-            await addDoc(collection(db, 'resultados'), data);
-            toast.success("Resultado guardado");
+        try {
+            if (existingResult && existingResult.id) {
+                // CAMINO 2: Si ya existe un resultado, lo ACTUALIZAMOS.
+                console.log(`Actualizando documento existente en 'resultados' con ID: ${existingResult.id}`);
+                const resultRef = doc(db, 'resultados', existingResult.id);
+                // Usamos updateDoc, que es más seguro para modificar.
+                await updateDoc(resultRef, data); 
+                toast.success("Resultado actualizado con éxito.");
+            } else {
+                // CAMINO 1: Si no existe, creamos uno NUEVO.
+                console.log("Creando nuevo documento en 'resultados'.");
+                await addDoc(collection(db, 'resultados'), data);
+                toast.success("Resultado guardado con éxito.");
+            }
+        } catch (error) {
+            console.error("ERROR AL GUARDAR EN FIREBASE:", error);
+            toast.error("Fallo al guardar en la base de datos.");
+            // Lanzamos el error para que el componente que llama sepa que falló
+            throw new Error("Error de escritura en Firestore."); 
         }
     },
     
