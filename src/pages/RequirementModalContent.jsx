@@ -1,6 +1,6 @@
 // src/pages/RequirementModalContent.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { firebaseServices } from '../firebase/services';
 import { serverTimestamp } from 'firebase/firestore';
