@@ -1,35 +1,26 @@
 // src/firebase/services.js
-import { db, storage } from './config';
+
+import { db, storage } from './config.js';
 import { doc, getDoc, setDoc, addDoc, collection, query, where, getDocs, serverTimestamp, orderBy, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { toast } from 'react-hot-toast';
 
 export const firebaseServices = {
-    // --- FUNCIONES DE AUTENTICACIÓN Y ROLES ---
+
+    // --- AUTENTICACIÓN Y ROLES ---
     getUserRole: async (uid) => {
         if (!uid) return null;
         try {
             const docRef = doc(db, 'users', uid);
             const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                return docSnap.data().role; 
-            } else {
-                return null;
-            }
+            return docSnap.exists() ? docSnap.data().role : null;
         } catch (error) {
-            console.error("Error al obtener el rol del usuario:", error);
+            console.error("Error en getUserRole:", error);
             return null;
         }
     },
 
-    getAllActionPlans: async () => {
-        const q = query(collection(db, 'planesDeAccion'));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    },
-
-    // --- FUNCIONES DE CHECKLIST (DATOS ESTÁTICOS) ---
+    // --- LECTURA DE CHECKLIST ---
     getChecklistData: async (pathSegments) => {
         const path = pathSegments.join('/');
         const q = query(collection(db, path), orderBy('id'));
@@ -38,25 +29,42 @@ export const firebaseServices = {
     },
 
     getFullChecklist: async () => {
-        const checklist = {};
-        const pilaresSnap = await getDocs(collection(db, 'checklist'));
-        for (const pilarDoc of pilaresSnap.docs) {
-            const pilarData = pilarDoc.data();
-            checklist[pilarData.id] = { ...pilarData, estandares: {} };
-            const estandaresSnap = await getDocs(collection(db, `checklist/${pilarDoc.id}/estandares`));
-            for (const estandarDoc of estandaresSnap.docs) {
-                const estandarData = estandarDoc.data();
-                checklist[pilarData.id].estandares[estandarData.id] = { ...estandarData, requisitos: [] };
-                const requisitosSnap = await getDocs(collection(db, `checklist/${pilarDoc.id}/estandares/${estandarDoc.id}/requisitos`));
-                requisitosSnap.forEach(reqDoc => {
-                    checklist[pilarData.id].estandares[estandarData.id].requisitos.push(reqDoc.data());
-                });
+        try {
+            const checklist = {};
+            const pilaresSnap = await getDocs(collection(db, 'checklist'));
+            for (const pilarDoc of pilaresSnap.docs) {
+                const pilarData = pilarDoc.data();
+                checklist[pilarData.id] = { ...pilarData, estandares: {} };
+                const estandaresSnap = await getDocs(collection(db, `checklist/${pilarDoc.id}/estandares`));
+                for (const estandarDoc of estandaresSnap.docs) {
+                    const estandarData = estandarDoc.data();
+                    checklist[pilarData.id].estandares[estandarData.id] = { ...estandarData, requisitos: [] };
+                    const requisitosSnap = await getDocs(collection(db, `checklist/${pilarDoc.id}/estandares/${estandarDoc.id}/requisitos`));
+                    requisitosSnap.forEach(reqDoc => {
+                        checklist[pilarData.id].estandares[estandarData.id].requisitos.push(reqDoc.data());
+                    });
+                }
             }
+            return checklist;
+        } catch (error) {
+            console.error("Error en getFullChecklist:", error);
+            return {};
         }
-        return checklist;
     },
 
-    // --- FUNCIONES DE AUDITORÍAS (CRUD) ---
+    getSingleRequirement: async (pilarId, estandarId, requisitoId) => {
+        if (!pilarId || !estandarId || !requisitoId) return null;
+        try {
+            const docRef = doc(db, 'checklist', pilarId, 'estandares', estandarId, 'requisitos', requisitoId);
+            const docSnap = await getDoc(docRef);
+            return docSnap.exists() ? docSnap.data() : null;
+        } catch (error) {
+            console.error("Error en getSingleRequirement:", error);
+            return null;
+        }
+    },
+
+    // --- GESTIÓN DE AUDITORÍAS ---
     createAudit: async (auditData, creatorUid) => {
         const auditsCountSnap = await getDocs(collection(db, 'auditorias'));
         const newCount = (auditsCountSnap.size + 1).toString().padStart(3, '0');
@@ -76,31 +84,20 @@ export const firebaseServices = {
         return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
     },
 
-    // Dentro de src/firebase/services.js
-
     getAllAuditsWithResults: async () => {
         const auditsQuery = query(collection(db, 'auditorias'), orderBy('fechaCreacion', 'desc'));
         const auditsSnapshot = await getDocs(auditsQuery);
         const audits = auditsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
         const resultsSnapshot = await getDocs(collection(db, 'resultados'));
         const resultsByAudit = {};
-        
         resultsSnapshot.forEach(doc => {
-            // --- LA CORRECCIÓN CLAVE ESTÁ AQUÍ ---
-            // Ahora, cada resultado incluye su propio ID de documento
-            const result = { id: doc.id, ...doc.data() }; 
-            
-            if (!resultsByAudit[result.auditoriaId]) {
-                resultsByAudit[result.auditoriaId] = [];
+            const result = { id: doc.id, ...doc.data() };
+            if (!resultsByAudit[result.auditId]) {
+                resultsByAudit[result.auditId] = [];
             }
-            resultsByAudit[result.auditoriaId].push(result);
+            resultsByAudit[result.auditId].push(result);
         });
-
-        return audits.map(audit => ({
-            ...audit,
-            resultados: resultsByAudit[audit.id] || [],
-        }));
+        return audits.map(audit => ({ ...audit, resultados: resultsByAudit[audit.id] || [] }));
     },
 
     closeAudit: async (auditId) => {
@@ -108,32 +105,24 @@ export const firebaseServices = {
         await updateDoc(auditRef, { estado: 'cerrada', fechaCierre: serverTimestamp() });
     },
 
-    // --- FUNCIONES DE RESULTADOS DE AUDITORÍA ---
+    // --- GESTIÓN DE RESULTADOS ---
     saveRequirementResult: async (data, existingResult) => {
         try {
             if (existingResult && existingResult.id) {
-                // CAMINO 2: Si ya existe un resultado, lo ACTUALIZAMOS.
-                console.log(`Actualizando documento existente en 'resultados' con ID: ${existingResult.id}`);
                 const resultRef = doc(db, 'resultados', existingResult.id);
-                // Usamos updateDoc, que es más seguro para modificar.
-                await updateDoc(resultRef, data); 
-                toast.success("Resultado actualizado con éxito.");
+                await updateDoc(resultRef, data);
             } else {
-                // CAMINO 1: Si no existe, creamos uno NUEVO.
-                console.log("Creando nuevo documento en 'resultados'.");
                 await addDoc(collection(db, 'resultados'), data);
-                toast.success("Resultado guardado con éxito.");
             }
         } catch (error) {
-            console.error("ERROR AL GUARDAR EN FIREBASE:", error);
+            console.error("ERROR AL GUARDAR RESULTADO EN FIREBASE:", error);
             toast.error("Fallo al guardar en la base de datos.");
-            // Lanzamos el error para que el componente que llama sepa que falló
-            throw new Error("Error de escritura en Firestore."); 
+            throw new Error("Error de escritura en Firestore.");
         }
     },
     
     getAuditResults: async (auditId) => {
-        const q = query(collection(db, 'resultados'), where('auditoriaId', '==', auditId));
+        const q = query(collection(db, 'resultados'), where('auditId', '==', auditId));
         const snapshot = await getDocs(q);
         const results = {};
         snapshot.forEach(doc => {
@@ -147,10 +136,10 @@ export const firebaseServices = {
         const docSnap = await getDoc(docRef);
         return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
     },
-    
-    // --- FUNCIONES DE PLANES DE ACCIÓN ---
+
+    // --- GESTIÓN DE PLANES DE ACCIÓN ---
     getNCsForAudit: async (auditId) => {
-        const q = query(collection(db, 'resultados'), where('auditoriaId', '==', auditId), where('resultado', '==', 'NC'));
+        const q = query(collection(db, 'resultados'), where('auditId', '==', auditId), where('resultado', '==', 'NC'));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
@@ -163,6 +152,12 @@ export const firebaseServices = {
         return { id: docResult.id, ...docResult.data() };
     },
 
+    getAllActionPlans: async () => {
+        const q = query(collection(db, 'planesDeAccion'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    },
+
     saveActionPlan: async (planData, existingPlanId) => {
         if (existingPlanId) {
             const planRef = doc(db, 'planesDeAccion', existingPlanId);
@@ -173,31 +168,21 @@ export const firebaseServices = {
             toast.success("Plan de acción creado.");
         }
     },
-
-    // Dentro de src/firebase/services.js
-
+    
     closeNonConformity: async (resultadoId) => {
         const resultRef = doc(db, 'resultados', resultadoId);
         await updateDoc(resultRef, {
-            resultado: 'NC Cerrada', // <-- CAMBIO CLAVE
+            resultado: 'NC Cerrada',
             comentarios: `NC cerrada. Ver plan de acción asociado. - ${new Date().toLocaleDateString()}`
         });
         toast.success("No Conformidad cerrada con éxito.");
     },
-
-    getSingleRequirement: async (pilarId, estandarId, requisitoId) => {
-        if (!pilarId || !estandarId || !requisitoId) return null;
-        const docRef = doc(db, 'checklist', pilarId, 'estandares', estandarId, 'requisitos', requisitoId);
-        const docSnap = await getDoc(docRef);
-        return docSnap.exists() ? docSnap.data() : null;
-    },
     
-    // --- FUNCIONES DE STORAGE Y DASHBOARD ---
+    // --- GESTIÓN DE ARCHIVOS ---
     uploadFile: async (file, path) => {
         const storageRef = ref(storage, path);
         await uploadBytes(storageRef, file);
         const url = await getDownloadURL(storageRef);
-        // Devolvemos un objeto con el nombre y la URL, como esperamos
         return { name: file.name, url: url };
     },
 };
