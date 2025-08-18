@@ -1,6 +1,6 @@
 // public/service-worker.js
 
-const CACHE_NAME = 'power-service-cache-v2'; // Incrementamos la versión para forzar la actualización
+const CACHE_NAME = 'power-service-cache-v3'; // Incrementamos la versión para forzar la actualización
 const urlsToCache = [
   '/',
   '/index.html',
