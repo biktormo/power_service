@@ -2,73 +2,77 @@
 
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { firebaseServices } from '../firebase/services';
 import { serverTimestamp } from 'firebase/firestore';
-import { firebaseServices } from '../firebase/services'; // Asegúrate de que esta ruta sea correcta
 
-const RequirementModalContent = ({ requisito, onSave, onClose, auditId, existingResult }) => {
-    if (!requisito) {
-        return <div className="loading-spinner">Cargando requisito...</div>;
-    }
-
+const RequirementModalContent = ({ requisito, onSave, onClose, auditId, existingResult, goToNextRequisito, hasNext }) => {
+    // Si el requisito cambia (al ir al siguiente), reseteamos los estados del formulario
     const [resultado, setResultado] = useState(existingResult?.resultado || '');
     const [comentarios, setComentarios] = useState(existingResult?.comentarios || '');
+    useEffect(() => {
+        setResultado(existingResult?.resultado || '');
+        setComentarios(existingResult?.comentarios || '');
+    }, [requisito, existingResult]);
+
     const [foto, setFoto] = useState(null);
     const [adjunto, setAdjunto] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
 
-    const handleSave = async () => {
+    // Función central de guardado que será reutilizada
+    const handleSaveCore = async () => {
         if (!resultado) {
-            toast.error("Debes seleccionar un resultado (C, NC, o NO).");
-            return;
+            toast.error("Debes seleccionar un resultado.");
+            throw new Error("Resultado no seleccionado");
         }
         setIsSaving(true);
-        
+        const toastId = toast.loading("Guardando...");
         try {
-            // Preparamos todos los datos antes de enviarlos
             let adjuntosArray = existingResult?.adjuntos || [];
-
             if (foto) {
                 const path = `audits/${auditId}/${requisito.id}/foto_${Date.now()}_${foto.name}`;
                 const fotoData = await firebaseServices.uploadFile(foto, path);
                 const existingFotoIndex = adjuntosArray.findIndex(a => a.type === 'foto');
-                if (existingFotoIndex > -1) {
-                    adjuntosArray[existingFotoIndex] = { ...fotoData, type: 'foto' };
-                } else {
-                    adjuntosArray.push({ ...fotoData, type: 'foto' });
-                }
+                if (existingFotoIndex > -1) { adjuntosArray[existingFotoIndex] = { ...fotoData, type: 'foto' }; }
+                else { adjuntosArray.push({ ...fotoData, type: 'foto' }); }
             }
-
             if (adjunto) {
                 const path = `audits/${auditId}/${requisito.id}/adjunto_${Date.now()}_${adjunto.name}`;
                 const adjuntoData = await firebaseServices.uploadFile(adjunto, path);
                 const existingAdjuntoIndex = adjuntosArray.findIndex(a => a.type === 'adjunto');
-                if (existingAdjuntoIndex > -1) {
-                    adjuntosArray[existingAdjuntoIndex] = { ...adjuntoData, type: 'adjunto' };
-                } else {
-                    adjuntosArray.push({ ...adjuntoData, type: 'adjunto' });
-                }
+                if (existingAdjuntoIndex > -1) { adjuntosArray[existingAdjuntoIndex] = { ...adjuntoData, type: 'adjunto' }; }
+                else { adjuntosArray.push({ ...adjuntoData, type: 'adjunto' }); }
             }
-
             const dataToSave = {
-                auditId,
-                requisitoId: requisito.id,
-                pilarId: requisito.pilarId,
-                estandarId: requisito.estandarId,
-                resultado,
-                comentarios,
-                adjuntos: adjuntosArray,
-                fechaResultado: serverTimestamp(),
+                auditId, requisitoId: requisito.id, pilarId: requisito.pilarId,
+                estandarId: requisito.estandarId, resultado, comentarios,
+                adjuntos: adjuntosArray, fechaResultado: serverTimestamp(),
             };
-
-            // Llamamos a la función onSave del padre con todos los datos listos
             await onSave(dataToSave, existingResult);
-
+            toast.success("Resultado guardado.", { id: toastId });
         } catch (error) {
-            toast.error("Error al preparar o subir archivos.");
-            console.error("Error en handleSave de RequirementModalContent:", error);
+            toast.error("Error al guardar.", { id: toastId });
             setIsSaving(false); // Liberamos el botón si hay un error
+            throw error;
         }
-        // No cambiamos isSaving a false aquí, porque el padre se encargará de recargar
+        setIsSaving(false);
+    };
+
+    const handleSaveAndClose = async () => {
+        try {
+            await handleSaveCore();
+            onClose(); // Solo cerramos si el guardado fue exitoso
+        } catch (e) {
+            // El error ya fue manejado en handleSaveCore
+        }
+    };
+
+    const handleSaveAndNext = async () => {
+        try {
+            await handleSaveCore();
+            goToNextRequisito(); // Solo avanzamos si el guardado fue exitoso
+        } catch (e) {
+            // El error ya fue manejado en handleSaveCore
+        }
     };
 
     return (
@@ -82,7 +86,15 @@ const RequirementModalContent = ({ requisito, onSave, onClose, auditId, existing
             <div className="form-group"><label>Tomar/Subir Fotografía</label><input type="file" accept="image/*" capture onChange={(e) => setFoto(e.target.files[0])} /></div>
             <div className="modal-actions">
                 <button onClick={onClose} className="btn btn-secondary" disabled={isSaving}>Cancelar</button>
-                <button onClick={handleSave} className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Guardando...' : 'Guardar y Cargar'}</button>
+                {hasNext ? (
+                    <button onClick={handleSaveAndNext} className="btn btn-primary" disabled={isSaving}>
+                        {isSaving ? 'Guardando...' : 'Guardar y Siguiente'}
+                    </button>
+                ) : (
+                    <button onClick={handleSaveAndClose} className="btn btn-primary" disabled={isSaving}>
+                        {isSaving ? 'Guardando...' : 'Guardar y Cargar'}
+                    </button>
+                )}
             </div>
         </>
     );
