@@ -97,20 +97,18 @@ const AuditPage = () => {
 
     const handleCloseModal = () => setIsModalOpen(false);
 
-    const handleSaveResult = async (data, existingResult) => {
+    const handleSaveResult = async (dataToSave, existingResult) => {
+        setIsModalOpen(false);
         const toastId = toast.loading("Guardando resultado...");
         try {
-            await firebaseServices.saveRequirementResult(data, existingResult);
+            await firebaseServices.saveRequirementResult(dataToSave, existingResult);
             toast.success("Resultado guardado con éxito. Actualizando...", { id: toastId });
-            
-            // Forzamos una recarga completa de la página después de un breve retraso.
             setTimeout(() => {
                 window.location.reload();
-            }, 1000); // 1 segundo de espera
-    
+            }, 1000);
         } catch (error) {
             toast.error("Error al guardar el resultado.", { id: toastId });
-            console.error("Error en handleSaveResult:", error);
+            console.error("Error en handleSaveResult de AuditPage:", error);
         }
     };
 
@@ -128,8 +126,6 @@ const AuditPage = () => {
     };
 
     const handleSaveAndExit = () => {
-        // No hay nada que guardar aquí, la acción de guardar ocurre en el modal.
-        // Simplemente navegamos al panel.
         navigate('/audits/panel');
     };
 
