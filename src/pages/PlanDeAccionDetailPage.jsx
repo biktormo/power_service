@@ -73,46 +73,52 @@ const PlanDeAccionDetailPage = () => {
     const handleFileChange = (e) => {
         setEvidenceFile(e.target.files[0]);
     };
-
-    // src/pages/PlanDeAccionDetailPage.jsx
-
+    
     const handleSubmit = async (e) => {
         e.preventDefault();
+    
+        // --- 1. COMPROBACIÓN DE SEGURIDAD ---
+        // Nos aseguramos de que los detalles de la NC se hayan cargado antes de continuar.
+        if (!ncDetail) {
+            toast.error("Los detalles de la No Conformidad no se han cargado. Inténtalo de nuevo.");
+            return;
+        }
+    
         if (!formData.responsable || !formData.fechaCompromiso || !formData.accionesRecomendadas) {
             toast.error("Todos los campos del plan son obligatorios.");
             return;
         }
         setIsSaving(true);
-        const toastId = toast.loading("Guardando plan de acción...");
-        
         try {
-            let evidenciasFinales = actionPlan?.evidencias || [];
-
+            let newEvidence = null;
             if (evidenceFile) {
+                toast.loading("Subiendo evidencia...");
                 const path = `action-plans/${resultadoId}/${Date.now()}_${evidenceFile.name}`;
-                const newEvidence = await firebaseServices.uploadFile(evidenceFile, path);
-                evidenciasFinales.push(newEvidence);
+                newEvidence = await firebaseServices.uploadFile(evidenceFile, path);
+                toast.dismiss();
             }
             
             const planData = {
                 ...formData,
                 fechaCompromiso: new Date(formData.fechaCompromiso),
                 resultadoId: resultadoId,
-                auditoriaId: ncDetail.auditoriaId,
+                // --- 2. CORRECCIÓN DE TIPEO ---
+                // Usamos ncDetail.auditId, que sabemos que existe gracias a la comprobación anterior
+                auditId: ncDetail.auditId, 
                 requisitoId: ncDetail.requisitoId,
-                evidencias: evidenciasFinales,
+                evidencias: actionPlan?.evidencias || [],
                 actualizadoEn: serverTimestamp()
             };
-
-            console.log("Datos a guardar en Firestore (Plan de Acción):", planData);
-            await firebaseServices.saveActionPlan(planData, actionPlan?.id);
             
-            toast.success("Plan de acción guardado con éxito.", { id: toastId });
+            if (newEvidence) {
+                planData.evidencias.push(newEvidence);
+            }
+    
+            await firebaseServices.saveActionPlan(planData, actionPlan?.id);
             navigate('/planes-de-accion');
-
         } catch (error) {
-            toast.error("Error al guardar el plan de acción.", { id: toastId });
-            console.error("Error detallado en handleSubmit (Plan de Acción):", error);
+            toast.error("Error al guardar el plan de acción.");
+            console.error(error);
         } finally {
             setIsSaving(false);
         }
