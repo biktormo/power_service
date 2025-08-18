@@ -24,6 +24,7 @@ const AuditPage = () => {
     const [selectedEstandar, setSelectedEstandar] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRequisito, setCurrentRequisito] = useState(null);
+    const [showMosaic, setShowMosaic] = useState(true);
 
     // Carga inicial de datos, independiente del DataContext
     useEffect(() => {
@@ -64,25 +65,44 @@ const AuditPage = () => {
     }, [selectedEstandar]);
     
     // Memoización para calcular elementos completados
-    const auditedCounts = useMemo(() => {
-        if (!fullChecklist || !results) return { pilares: new Set(), estandares: new Set() };
-        const pilarResultsCount = {}, estandarResultsCount = {};
-        Object.values(results).forEach(r => {
-            pilarResultsCount[r.pilarId] = (pilarResultsCount[r.pilarId] || 0) + 1;
-            estandarResultsCount[r.estandarId] = (estandarResultsCount[r.estandarId] || 0) + 1;
-        });
-        const completedPilares = new Set(), completedEstandares = new Set();
-        if (Object.keys(fullChecklist).length > 0) {
-            Object.values(fullChecklist).forEach(pilar => {
-                let totalReqsInPilar = 0;
-                Object.values(pilar.estandares).forEach(estandar => {
-                    totalReqsInPilar += estandar.requisitos.length;
-                    if (estandarResultsCount[estandar.id] === estandar.requisitos.length && estandar.requisitos.length > 0) completedEstandares.add(estandar.id);
-                });
-                if (pilarResultsCount[pilar.id] === totalReqsInPilar && totalReqsInPilar > 0) completedPilares.add(pilar.id);
+    const completionStatus = useMemo(() => {
+        if (!fullChecklist || !results) return { pilares: {}, estandares: {} };
+    
+        const pilarStatus = {};
+        const estandarStatus = {};
+    
+        Object.values(fullChecklist).forEach(pilar => {
+            let requisitosEnPilar = 0;
+            let resultadosEnPilar = 0;
+    
+            Object.values(pilar.estandares).forEach(estandar => {
+                const totalReqs = estandar.requisitos.length;
+                if (totalReqs === 0) return;
+    
+                const resultadosEnEstandar = estandar.requisitos.filter(req => results[req.id]).length;
+                
+                requisitosEnPilar += totalReqs;
+                resultadosEnPilar += resultadosEnEstandar;
+    
+                if (resultadosEnEstandar === 0) {
+                    estandarStatus[estandar.id] = 'pendiente';
+                } else if (resultadosEnEstandar < totalReqs) {
+                    estandarStatus[estandar.id] = 'en_proceso';
+                } else {
+                    estandarStatus[estandar.id] = 'completado';
+                }
             });
-        }
-        return { pilares: completedPilares, estandares: completedEstandares };
+    
+            if (resultadosEnPilar === 0) {
+                pilarStatus[pilar.id] = 'pendiente';
+            } else if (resultadosEnPilar < requisitosEnPilar) {
+                pilarStatus[pilar.id] = 'en_proceso';
+            } else {
+                pilarStatus[pilar.id] = 'completado';
+            }
+        });
+        
+        return { pilares: pilarStatus, estandares: estandarStatus };
     }, [fullChecklist, results]);
 
     // Lógica de handlers
@@ -153,19 +173,29 @@ const AuditPage = () => {
                         <select value={selectedPilar} onChange={e => setSelectedPilar(e.target.value)}>
                             <option value="">-- Elige un pilar --</option>
                             {pilares.map(p => (
-                                <option key={p.id} value={p.docId} className={auditedCounts.pilares.has(p.id) ? 'option-audited' : ''}>
+                                <option 
+                                    key={p.id} 
+                                    value={p.docId} 
+                                    className={`option-status-${completionStatus.pilares[p.id] || 'pendiente'}`}
+                                >
                                     {p.nombre} ({p.id})
                                 </option>
                             ))}
                         </select>
                     </div>
+
+                    {/* --- ESTA ES LA PARTE CORREGIDA --- */}
                     {selectedPilar && (
-                        <div className="form-group">
+                        <div className="form-group"> {/* El select ahora está dentro de su propio div */}
                             <label>2. Seleccionar Estándar</label>
                             <select value={selectedEstandar} onChange={e => setSelectedEstandar(e.target.value)}>
                                 <option value="">-- Elige un estándar --</option>
                                 {estandares.map(e => (
-                                    <option key={e.id} value={e.docId} className={auditedCounts.estandares.has(e.id) ? 'option-audited' : ''}>
+                                    <option 
+                                        key={e.id} 
+                                        value={e.docId} 
+                                        className={`option-status-${completionStatus.estandares[e.id] || 'pendiente'}`}
+                                    >
                                         {e.id} - {e.descripcion}
                                     </option>
                                 ))}
@@ -173,6 +203,35 @@ const AuditPage = () => {
                         </div>
                     )}
                 </div>
+
+                {/* Botón para alternar la vista */}
+                <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                    <button className="btn btn-secondary" onClick={() => setShowMosaic(!showMosaic)}>
+                        {showMosaic ? 'Ocultar Mapa de Auditoría' : 'Mostrar Mapa de Auditoría'}
+                    </button>
+                </div>
+
+                {/* El Panel de Mosaicos */}
+                {showMosaic && fullChecklist && (
+                    <div className="mosaic-panel">
+                        {Object.values(fullChecklist).map(pilar => {
+                            const totalReqsInPilar = Object.values(pilar.estandares).reduce((sum, est) => sum + est.requisitos.length, 0);
+                            const auditedReqsInPilar = Object.values(results).filter(r => r.pilarId === pilar.id).length;
+                            const progress = totalReqsInPilar > 0 ? (auditedReqsInPilar / totalReqsInPilar) * 100 : 0;
+
+                            return (
+                                <div key={pilar.id} className="mosaic-card card" onClick={() => setSelectedPilar(pilar.docId)}>
+                                    <h4>{pilar.nombre} ({pilar.id})</h4>
+                                    <p>{Object.keys(pilar.estandares).length} Estándares</p>
+                                    <div className="progress-text">{auditedReqsInPilar} / {totalReqsInPilar} Requisitos Auditados</div>
+                                    <div className="progress-bar">
+                                        <div className="progress-bar-inner" style={{ width: `${progress}%` }}></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 {requisitos.length > 0 && (
                     <div className="requisito-list-container">

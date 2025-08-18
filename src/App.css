@@ -391,3 +391,41 @@ h1, h2, h3, h4 {
 .value.C { color: var(--success-color); }
 .value.NC { color: var(--danger-color); }
 .value.NO { color: var(--text-secondary-color); }
+
+.option-status-en_proceso {
+  color: var(--primary-color);
+  font-weight: bold;
+}
+.option-status-completado {
+  color: var(--text-secondary-color);
+  text-decoration: line-through;
+}
+
+/* --- Estilos para el Panel de Mosaicos --- */
+.mosaic-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.mosaic-card {
+  cursor: pointer;
+  text-align: left;
+}
+
+.mosaic-card h4 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.mosaic-card p {
+  color: var(--text-secondary-color);
+  margin: 0 0 1rem 0;
+}
+
+.progress-text {
+  font-size: 0.9em;
+  color: var(--text-secondary-color);
+  margin-bottom: 0.25rem;
+}
