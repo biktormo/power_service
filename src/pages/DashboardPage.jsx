@@ -5,8 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { firebaseServices } from '../firebase/services';
 import { toast } from 'react-hot-toast';
-import { exportToPDF, exportToXLS } from '../utils/exportUtils';
-import ProtectedRoute from '../components/ProtectedRoute';
+import { exportToPDF, exportToXLS } from '../utils/exportUtils.js';
+import ProtectedRoute from '../components/ProtectedRoute.jsx';
+import { getCachedData, setCachedData } from '../utils/dataCache.js'; // Importamos el caché
 
 const DashboardPage = () => {
     const [loading, setLoading] = useState(true);
@@ -17,7 +18,6 @@ const DashboardPage = () => {
     const [pilaresList, setPilaresList] = useState([]);
     const [requisitosList, setRequisitosList] = useState([]);
 
-    // Filtros
     const [selectedAuditId, setSelectedAuditId] = useState('');
     const [selectedPilar, setSelectedPilar] = useState('');
     const [selectedRequisito, setSelectedRequisito] = useState('');
@@ -25,46 +25,70 @@ const DashboardPage = () => {
     
     const navigate = useNavigate();
 
-    // Lógica de carga de datos restaurada a este componente
     useEffect(() => {
         const loadData = async () => {
-            setLoading(true);
+            const cachedData = getCachedData();
+            if (cachedData) {
+                // Si hay datos en caché, los usamos inmediatamente
+                setAllAudits(cachedData.audits);
+                setActionPlans(cachedData.actionPlans);
+                setFullChecklist(cachedData.fullChecklist);
+                const results = cachedData.audits.flatMap(a => a.resultados.map(r => ({ ...r, lugar: a.lugar, fechaCreacion: a.fechaCreacion })));
+                setAllResults(results);
+                setLoading(false); // La carga es "instantánea"
+            }
+
+            // Siempre intentamos buscar datos frescos en segundo plano
             try {
                 const audits = await firebaseServices.getAllAuditsWithResults();
-                const results = audits.flatMap(a => a.resultados.map(r => ({ ...r, lugar: a.lugar, fechaCreacion: a.fechaCreacion })));
                 const plans = await firebaseServices.getAllActionPlans();
                 const checklist = await firebaseServices.getFullChecklist();
                 const pilares = await firebaseServices.getChecklistData(['checklist']);
-
+                
+                const results = audits.flatMap(a => a.resultados.map(r => ({ ...r, lugar: a.lugar, fechaCreacion: a.fechaCreacion })));
+                
+                // Actualizamos los estados con los datos frescos
                 setAllAudits(audits);
-                setAllResults(results);
                 setActionPlans(plans);
                 setFullChecklist(checklist);
                 setPilaresList(pilares);
+                setAllResults(results);
+
+                // Guardamos los datos nuevos en el caché para la próxima vez
+                let totalReqs = 0;
+                if (checklist && Object.keys(checklist).length > 0) {
+                    Object.values(checklist).forEach(pilar => {
+                        if (pilar.estandares) {
+                            Object.values(pilar.estandares).forEach(estandar => {
+                                if (estandar.requisitos) totalReqs += estandar.requisitos.length;
+                            });
+                        }
+                    });
+                }
+                setCachedData({ audits, actionPlans, fullChecklist: checklist, totalRequisitos: totalReqs });
+
             } catch (error) {
-                toast.error("Error al cargar los datos del dashboard.");
+                toast.error("Error al sincronizar datos con el servidor.");
                 console.error(error);
             } finally {
-                setLoading(false);
+                // Solo detenemos el spinner si no había datos en caché (primera carga)
+                if (!cachedData) {
+                    setLoading(false);
+                }
             }
         };
         loadData();
     }, []);
 
     useEffect(() => {
-        const loadRequisitos = async () => {
-            if (selectedPilar && fullChecklist[selectedPilar]) {
-                const reqs = Object.values(fullChecklist[selectedPilar].estandares).flatMap(e => e.requisitos);
-                setRequisitosList(reqs);
-            } else {
-                setRequisitosList([]);
-            }
-            setSelectedRequisito('');
-        };
-        loadRequisitos();
+        if (selectedPilar && fullChecklist && fullChecklist[selectedPilar]) {
+            const reqs = Object.values(fullChecklist[selectedPilar].estandares).flatMap(e => e.requisitos);
+            setRequisitosList(reqs);
+        } else {
+            setRequisitosList([]);
+        }
+        setSelectedRequisito('');
     }, [selectedPilar, fullChecklist]);
-
-    // --- CÁLCULOS MEMOIZADOS PARA LOS GRÁFICOS ---
 
     const stats = useMemo(() => {
         const resultCounts = { C: 0, NC: 0, NO: 0, "NC Cerrada": 0 };

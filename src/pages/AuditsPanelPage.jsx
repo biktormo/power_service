@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { firebaseServices } from '../firebase/services';
 import { toast } from 'react-hot-toast';
-import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedRoute from '../components/ProtectedRoute.jsx';
+import { getCachedData, setCachedData } from '../utils/dataCache.js'; // Importamos el caché
 
 const AuditsPanelPage = () => {
     const [audits, setAudits] = useState([]);
@@ -12,33 +13,44 @@ const AuditsPanelPage = () => {
     const [totalRequisitos, setTotalRequisitos] = useState(0);
     const navigate = useNavigate();
 
-    // Lógica de carga de datos restaurada a este componente
     useEffect(() => {
         const fetchAuditsAndData = async () => {
-            setLoading(true);
+            const cachedData = getCachedData();
+            if (cachedData) {
+                setAudits(cachedData.audits);
+                setTotalRequisitos(cachedData.totalRequisitos);
+                setLoading(false);
+            }
+
             try {
                 const allAudits = await firebaseServices.getAllAuditsWithResults();
-                setAudits(allAudits);
-
                 const checklist = await firebaseServices.getFullChecklist();
+                
                 let count = 0;
                 if (checklist && Object.keys(checklist).length > 0) {
                     Object.values(checklist).forEach(pilar => {
-                        if(pilar.estandares) {
+                        if (pilar.estandares) {
                             Object.values(pilar.estandares).forEach(estandar => {
-                                if (estandar.requisitos) {
-                                    count += estandar.requisitos.length;
-                                }
+                                if (estandar.requisitos) count += estandar.requisitos.length;
                             });
                         }
                     });
                 }
+                
+                setAudits(allAudits);
                 setTotalRequisitos(count);
+
+                // Guardamos en caché para la próxima vez (necesitamos los actionPlans también)
+                const actionPlans = await firebaseServices.getAllActionPlans();
+                setCachedData({ audits: allAudits, totalRequisitos: count, actionPlans, fullChecklist: checklist });
+
             } catch (error) {
-                toast.error("No se pudieron cargar las auditorías.");
+                toast.error("No se pudieron sincronizar las auditorías.");
                 console.error(error);
             } finally {
-                setLoading(false);
+                if (!cachedData) {
+                    setLoading(false);
+                }
             }
         };
         fetchAuditsAndData();
