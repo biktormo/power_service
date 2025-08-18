@@ -1,6 +1,6 @@
 // src/pages/LoginPage.jsx
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -40,6 +40,9 @@ const LoginPage = () => {
                     <input type="password" id="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
                 <button type="submit" className="btn btn-primary">Entrar</button>
+                <p style={{ textAlign: 'center', marginTop: '1rem' }}>
+                    ¿No tienes una cuenta? <Link to="/signup">Regístrate aquí</Link>
+                </p>
             </form>
         </div>
     );

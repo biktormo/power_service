@@ -14,6 +14,7 @@ import AuditPage from './pages/AuditPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import PlanesDeAccionPage from './pages/PlanesDeAccionPage.jsx';
 import PlanDeAccionDetailPage from './pages/PlanDeAccionDetailPage.jsx';
+import SignupPage from './pages/SignupPage.jsx';
 
 import './App.css';
 
@@ -22,6 +23,7 @@ function App() {
     <Layout>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
         <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
         <Route path="/audit/new" element={<ProtectedRoute allowedRoles={['administrador', 'auditor']}><NewAuditPage /></ProtectedRoute>} />
         <Route path="/audit/:auditId" element={<ProtectedRoute allowedRoles={['administrador', 'auditor']}><AuditPage /></ProtectedRoute>} />

@@ -185,4 +185,25 @@ export const firebaseServices = {
         const url = await getDownloadURL(storageRef);
         return { name: file.name, url: url };
     },
+
+    // Nueva función para registrar un usuario
+    createUser: async (email, password, role = 'colaborador') => {
+        // Importa esta función al principio del archivo
+        // import { createUserWithEmailAndPassword } from "firebase/auth";
+        // import { auth } from './config';
+
+        // 1. Crear el usuario en Firebase Authentication
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // 2. Crear el documento de rol en Firestore
+        // Por defecto, todos los usuarios nuevos serán 'colaborador'
+        await setDoc(doc(db, "users", user.uid), {
+            email: user.email,
+            role: role
+        });
+
+        toast.success("Usuario registrado con éxito.");
+        return user;
+    },
 };
