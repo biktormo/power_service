@@ -4,6 +4,7 @@ import { db, storage } from './config.js';
 import { doc, getDoc, setDoc, addDoc, collection, query, where, getDocs, serverTimestamp, orderBy, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { toast } from 'react-hot-toast';
+import { createUserWithEmailAndPassword } from "firebase/auth";
 
 export const firebaseServices = {
 
@@ -17,6 +18,27 @@ export const firebaseServices = {
         } catch (error) {
             console.error("Error en getUserRole:", error);
             return null;
+        }
+    },
+
+    createUser: async (email, password, role = 'colaborador') => {
+        try {
+            // 1. Crear el usuario en Firebase Authentication
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+    
+            // 2. Crear el documento de rol en Firestore
+            await setDoc(doc(db, "users", user.uid), {
+                email: user.email,
+                role: role
+            });
+    
+            toast.success("Usuario registrado con éxito.");
+            return user;
+        } catch (error) {
+            // Devolvemos el error para que el componente que llama lo maneje
+            console.error("Error en createUser:", error);
+            throw error;
         }
     },
 
