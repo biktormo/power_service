@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import Modal from '../components/Modal.jsx';
 import RequirementModalContent from './RequirementModalContent.jsx';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
+import { PILARES_ORDER } from '../utils/ordering.js';
 
 const AuditPage = () => {
     const { auditId } = useParams();
@@ -34,6 +35,8 @@ const AuditPage = () => {
                 const details = await firebaseServices.getAuditDetails(auditId);
                 setAuditDetails(details);
                 const p = await firebaseServices.getChecklistData(['checklist']);
+                // Ordenamos el array 'p' basándonos en nuestro array de orden
+                p.sort((a, b) => PILARES_ORDER.indexOf(a.id) - PILARES_ORDER.indexOf(b.id));
                 setPilares(p);
                 const r = await firebaseServices.getAuditResults(auditId);
                 setResults(r);
@@ -157,7 +160,9 @@ const AuditPage = () => {
 
                 {showMosaic && fullChecklist && (
                     <div className="mosaic-panel">
-                        {Object.values(fullChecklist).map(pilar => {
+                        {PILARES_ORDER.map(pilarId => {
+                            const pilar = fullChecklist[pilarId];
+                            if (!pilar) return null; // Por si algún pilar no existe
                             const totalReqsInPilar = Object.values(pilar.estandares).reduce((sum, est) => sum + est.requisitos.length, 0);
                             const auditedReqsInPilar = Object.values(results).filter(r => r.pilarId === pilar.id).length;
                             const progress = totalReqsInPilar > 0 ? (auditedReqsInPilar / totalReqsInPilar) * 100 : 0;

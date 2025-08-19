@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { exportToPDF, exportToXLS } from '../utils/exportUtils.js';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
 import { getCachedData, setCachedData } from '../utils/dataCache.js'; // Importamos el caché
+import { PILARES_ORDER } from '../utils/ordering.js';
 
 const DashboardPage = () => {
     const [loading, setLoading] = useState(true);
@@ -44,6 +45,8 @@ const DashboardPage = () => {
                 const plans = await firebaseServices.getAllActionPlans();
                 const checklist = await firebaseServices.getFullChecklist();
                 const pilares = await firebaseServices.getChecklistData(['checklist']);
+                    pilares.sort((a, b) => PILARES_ORDER.indexOf(a.id) - PILARES_ORDER.indexOf(b.id));
+                    setPilaresList(pilares);
                 
                 const results = audits.flatMap(a => a.resultados.map(r => ({ ...r, lugar: a.lugar, fechaCreacion: a.fechaCreacion })));
                 
