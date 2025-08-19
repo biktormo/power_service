@@ -1,31 +1,28 @@
 // src/utils/dataCache.js
 
-// Este es nuestro caché simple en memoria.
 let cache = {
     audits: null,
     actionPlans: null,
     fullChecklist: null,
     totalRequisitos: 0,
-    lastFetch: 0, // Para saber cuándo fue la última vez que se buscaron datos
+    lastFetch: 0,
 };
 
-// Tiempo de vida del caché en milisegundos (ej: 5 minutos)
-const CACHE_DURATION = 5 * 60 * 1000;
+// Tiempo de vida del caché en milisegundos (ej: 2 minutos para pruebas)
+const CACHE_DURATION = 2 * 60 * 1000;
 
 export const getCachedData = () => {
     const now = Date.now();
-    // Si el caché no está vacío y no ha expirado, lo devolvemos
     if (cache.audits && (now - cache.lastFetch < CACHE_DURATION)) {
-        console.log("Devolviendo datos desde el CACHÉ.");
+        console.log("%cDATOS SERVIDOS DESDE EL CACHÉ", "color: lightgreen; font-weight: bold;");
         return cache;
     }
-    // Si no, devolvemos null para forzar una nueva búsqueda
-    console.log("Caché vacío o expirado. Se necesitan datos frescos.");
+    console.log("%cCACHÉ VACÍO O EXPIRADO", "color: orange; font-weight: bold;");
     return null;
 };
 
 export const setCachedData = (data) => {
-    console.log("Guardando nuevos datos en el CACHÉ.");
+    console.log("%cGUARDANDO DATOS NUEVOS EN EL CACHÉ", "color: cyan; font-weight: bold;");
     cache = {
         ...data,
         lastFetch: Date.now(),
@@ -33,12 +30,9 @@ export const setCachedData = (data) => {
 };
 
 export const clearCache = () => {
-    console.log("Limpiando el CACHÉ.");
+    console.log("%cCACHÉ LIMPIADO", "color: red; font-weight: bold;");
     cache = {
-        audits: null,
-        actionPlans: null,
-        fullChecklist: null,
-        totalRequisitos: 0,
-        lastFetch: 0,
+        audits: null, actionPlans: null, fullChecklist: null,
+        totalRequisitos: 0, lastFetch: 0,
     };
 };

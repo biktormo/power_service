@@ -1,6 +1,7 @@
 // src/pages/AuditPage.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { clearCache } from '../utils/dataCache.js';
 import { useParams, useNavigate } from 'react-router-dom';
 import { firebaseServices } from '../firebase/services.js';
 import { toast } from 'react-hot-toast';
@@ -125,9 +126,22 @@ const AuditPage = () => {
     };
 
     const handleSaveResult = async (dataToSave, existingResult) => {
-        // Esta función solo se encarga de guardar y actualizar el estado
-        await firebaseServices.saveRequirementResult(dataToSave, existingResult);
-        setResults(prev => ({ ...prev, [dataToSave.requisitoId]: dataToSave }));
+        setIsModalOpen(false);
+        const toastId = toast.loading("Guardando resultado...");
+        try {
+            await firebaseServices.saveRequirementResult(dataToSave, existingResult);
+            toast.success("Resultado guardado.", { id: toastId });
+            
+            // --- ¡ACCIÓN CLAVE! ---
+            // Invalidamos el caché para que las otras páginas recarguen
+            clearCache();
+            
+            // Actualizamos la UI local inmediatamente sin recargar la página
+            setResults(prev => ({ ...prev, [dataToSave.requisitoId]: dataToSave }));
+            
+        } catch (error) {
+            toast.error("Error al guardar el resultado.", { id: toastId });
+        }
     };
 
     const handleFinalizeAudit = async () => { /* ... sin cambios ... */ };

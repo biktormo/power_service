@@ -59,25 +59,16 @@ const DashboardPage = () => {
 
                 // Guardamos los datos nuevos en el caché para la próxima vez
                 let totalReqs = 0;
-                if (checklist && Object.keys(checklist).length > 0) {
-                    Object.values(checklist).forEach(pilar => {
-                        if (pilar.estandares) {
-                            Object.values(pilar.estandares).forEach(estandar => {
-                                if (estandar.requisitos) totalReqs += estandar.requisitos.length;
-                            });
-                        }
-                    });
-                }
+                Object.values(checklist).forEach(pilar => {
+                    Object.values(pilar.estandares).forEach(estandar => { totalReqs += estandar.requisitos.length; });
+                });
                 setCachedData({ audits, actionPlans, fullChecklist: checklist, totalRequisitos: totalReqs });
-
-            } catch (error) {
+                } catch (error) {
                 toast.error("Error al sincronizar datos con el servidor.");
-                console.error(error);
-            } finally {
-                // Solo detenemos el spinner si no había datos en caché (primera carga)
-                if (!cachedData) {
-                    setLoading(false);
-                }
+                } finally {
+                // Si no había caché, ahora sí quitamos el loader
+                if (!cachedData) setLoading(false);
+                
             }
         };
         loadData();
