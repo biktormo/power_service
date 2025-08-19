@@ -1,6 +1,6 @@
 // src/firebase/services.js
 
-import { db, storage } from './config.js';
+import { db, storage, auth } from './config.js';
 import { doc, getDoc, setDoc, addDoc, collection, query, where, getDocs, serverTimestamp, orderBy, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { toast } from 'react-hot-toast';
