@@ -1,70 +1,83 @@
 // src/pages/AuditPage.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { clearCache } from '../utils/dataCache.js';
 import { useParams, useNavigate } from 'react-router-dom';
 import { firebaseServices } from '../firebase/services.js';
 import { toast } from 'react-hot-toast';
 import Modal from '../components/Modal.jsx';
 import RequirementModalContent from './RequirementModalContent.jsx';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
+import { getCachedData, clearCache, setCachedData } from '../utils/dataCache.js';
 import { PILARES_ORDER } from '../utils/ordering.js';
 
 const AuditPage = () => {
     const { auditId } = useParams();
     const navigate = useNavigate();
     
-    // Estados
+    // Estados locales
     const [auditDetails, setAuditDetails] = useState(null);
     const [pilares, setPilares] = useState([]);
     const [estandares, setEstandares] = useState([]);
     const [requisitos, setRequisitos] = useState([]);
     const [results, setResults] = useState({});
     const [loading, setLoading] = useState(true);
-    const [fullChecklist, setFullChecklist] = useState(null);
+    
+    const [fullChecklist, setFullChecklist] = useState(() => getCachedData()?.fullChecklist || null);
+
     const [selectedPilar, setSelectedPilar] = useState('');
     const [selectedEstandar, setSelectedEstandar] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRequisito, setCurrentRequisito] = useState(null);
     const [showMosaic, setShowMosaic] = useState(true);
 
-    // Carga de datos
     useEffect(() => {
-        const loadInitialData = async () => {
+        const loadPageData = async () => {
             setLoading(true);
             try {
-                const details = await firebaseServices.getAuditDetails(auditId);
+                const detailsPromise = firebaseServices.getAuditDetails(auditId);
+                const resultsPromise = firebaseServices.getAuditResults(auditId);
+                const checklistPromise = fullChecklist ? Promise.resolve(fullChecklist) : firebaseServices.getFullChecklist();
+                
+                const [details, r, checklistData] = await Promise.all([detailsPromise, resultsPromise, checklistPromise]);
+
                 setAuditDetails(details);
-                const p = await firebaseServices.getChecklistData(['checklist']);
-                // Ordenamos el array 'p' basándonos en nuestro array de orden
-                p.sort((a, b) => PILARES_ORDER.indexOf(a.id) - PILARES_ORDER.indexOf(b.id));
-                setPilares(p);
-                const r = await firebaseServices.getAuditResults(auditId);
                 setResults(r);
-                const checklistData = await firebaseServices.getFullChecklist();
-                setFullChecklist(checklistData);
+                
+                if (!fullChecklist) {
+                    setFullChecklist(checklistData);
+                }
+
+                if (checklistData && Object.keys(checklistData).length > 0) {
+                    const p = Object.values(checklistData).map(pilar => ({ id: pilar.id, docId: pilar.id, nombre: pilar.nombre }));
+                    p.sort((a, b) => PILARES_ORDER.indexOf(a.id) - PILARES_ORDER.indexOf(b.id));
+                    setPilares(p);
+                }
             } catch (error) {
-                toast.error("Error cargando datos de la auditoría");
-            } finally { setLoading(false); }
+                toast.error("Error cargando los datos de la auditoría.");
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
         };
-        loadInitialData();
+        loadPageData();
     }, [auditId]);
 
     useEffect(() => {
-        if (selectedPilar) {
-            firebaseServices.getChecklistData(['checklist', selectedPilar, 'estandares']).then(est => {
-                setEstandares(est); setRequisitos([]); setSelectedEstandar('');
-            });
+        if (selectedPilar && fullChecklist) {
+            const estandarData = fullChecklist[selectedPilar]?.estandares || {};
+            const estandarArray = Object.values(estandarData).map(e => ({ id: e.id, docId: e.id, descripcion: e.descripcion}));
+            setEstandares(estandarArray);
+            setRequisitos([]);
+            setSelectedEstandar('');
         }
-    }, [selectedPilar]);
+    }, [selectedPilar, fullChecklist]);
 
     useEffect(() => {
-        if (selectedPilar && selectedEstandar) {
-            firebaseServices.getChecklistData(['checklist', selectedPilar, 'estandares', selectedEstandar, 'requisitos']).then(req => {
-                setRequisitos(req);
-            });
+        if (selectedPilar && selectedEstandar && fullChecklist) {
+            const reqs = fullChecklist[selectedPilar]?.estandares[selectedEstandar]?.requisitos || [];
+            setRequisitos(reqs);
         }
-    }, [selectedEstandar]);
+    }, [selectedEstandar, selectedPilar, fullChecklist]);
     
     const completionStatus = useMemo(() => {
         if (!fullChecklist || !results) return { pilares: {}, estandares: {} };
@@ -88,7 +101,6 @@ const AuditPage = () => {
         return { pilares: pilarStatus, estandares: estandarStatus };
     }, [fullChecklist, results]);
 
-    // Lógica para encontrar el siguiente requisito
     const findNextRequisito = (currentReqId) => {
         if (!requisitos || requisitos.length === 0) return null;
         const currentIndex = requisitos.findIndex(req => req.id === currentReqId);
@@ -101,19 +113,17 @@ const AuditPage = () => {
     const nextRequisito = useMemo(() => {
         return currentRequisito ? findNextRequisito(currentRequisito.id) : null;
     }, [currentRequisito, requisitos]);
-    
+
     const goToNextRequisito = () => {
         if (nextRequisito) {
             setCurrentRequisito(nextRequisito);
         } else {
             toast.success("¡Estándar completado!");
             handleCloseModal();
-            // Recargamos para que se actualice el estado "completado" en el filtro
-            setTimeout(() => window.location.reload(), 1000);
+            clearCache();
         }
     };
-    
-    // Handlers
+
     const handleRequisitoClick = (req) => {
         if (auditDetails?.estado === 'cerrada') return;
         setCurrentRequisito(req);
@@ -126,26 +136,23 @@ const AuditPage = () => {
     };
 
     const handleSaveResult = async (dataToSave, existingResult) => {
-        setIsModalOpen(false);
-        const toastId = toast.loading("Guardando resultado...");
-        try {
-            await firebaseServices.saveRequirementResult(dataToSave, existingResult);
-            toast.success("Resultado guardado.", { id: toastId });
-            
-            // --- ¡ACCIÓN CLAVE! ---
-            // Invalidamos el caché para que las otras páginas recarguen
-            clearCache();
-            
-            // Actualizamos la UI local inmediatamente sin recargar la página
-            setResults(prev => ({ ...prev, [dataToSave.requisitoId]: dataToSave }));
-            
-        } catch (error) {
-            toast.error("Error al guardar el resultado.", { id: toastId });
+        await firebaseServices.saveRequirementResult(dataToSave, existingResult);
+        setResults(prev => ({ ...prev, [dataToSave.requisitoId]: dataToSave }));
+        clearCache();
+    };
+
+    const handleFinalizeAudit = async () => {
+        if (window.confirm("¿Estás seguro de que deseas cerrar esta auditoría? No podrás realizar más cambios.")) {
+            try {
+                await firebaseServices.closeAudit(auditId);
+                clearCache();
+                toast.success("Auditoría cerrada con éxito.");
+                navigate('/audits/panel');
+            } catch (error) { toast.error("Error al cerrar la auditoría."); }
         }
     };
 
-    const handleFinalizeAudit = async () => { /* ... sin cambios ... */ };
-    const handleSaveAndExit = () => { /* ... sin cambios ... */ };
+    const handleSaveAndExit = () => navigate('/audits/panel');
 
     if (loading) return <div className="loading-spinner">Cargando auditoría...</div>;
 
@@ -176,12 +183,12 @@ const AuditPage = () => {
                     <div className="mosaic-panel">
                         {PILARES_ORDER.map(pilarId => {
                             const pilar = fullChecklist[pilarId];
-                            if (!pilar) return null; // Por si algún pilar no existe
+                            if (!pilar) return null;
                             const totalReqsInPilar = Object.values(pilar.estandares).reduce((sum, est) => sum + est.requisitos.length, 0);
                             const auditedReqsInPilar = Object.values(results).filter(r => r.pilarId === pilar.id).length;
                             const progress = totalReqsInPilar > 0 ? (auditedReqsInPilar / totalReqsInPilar) * 100 : 0;
                             return (
-                                <div key={pilar.id} className="mosaic-card card" onClick={() => setSelectedPilar(pilar.docId)}>
+                                <div key={pilar.id} className="mosaic-card card" onClick={() => setSelectedPilar(pilar.id)}>
                                     <h4>{pilar.nombre} ({pilar.id})</h4><p>{Object.keys(pilar.estandares).length} Estándares</p>
                                     <div className="progress-text">{auditedReqsInPilar} / {totalReqsInPilar} Requisitos Auditados</div>
                                     <div className="progress-bar"><div className="progress-bar-inner" style={{ width: `${progress}%` }}></div></div>
