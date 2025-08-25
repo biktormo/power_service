@@ -4,16 +4,14 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// --- ¡IMPORTANTE! USA TUS CREDENCIALES REALES AQUÍ ---
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyC_X_Ex30hkD-bE0amCpuu9tipo-0x1AZo",
+  authDomain: "power-service-f513f.firebaseapp.com",
+  projectId: "power-service-f513f",
+  storageBucket: "power-service-f513f.firebasestorage.app",
+  messagingSenderId: "429369870122",
+  appId: "1:429369870122:web:1f151f86a3a3435fff4053"
 };
-// ----------------------------------------------------
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
