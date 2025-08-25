@@ -3,124 +3,134 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { firebaseServices } from '../firebase/services';
-import ProtectedRoute from '../components/ProtectedRoute';
+import ProtectedRoute from '../components/ProtectedRoute.jsx';
 import { toast } from 'react-hot-toast';
 
 const PlanesDeAccionPage = () => {
-    const [loading, setLoading] = useState(true);
-    const [audits, setAudits] = useState([]);
-    const [selectedAudit, setSelectedAudit] = useState(null);
-    const [nonConformities, setNonConformities] = useState([]);
-    const [actionPlansStatus, setActionPlansStatus] = useState({});
-    const [isFetchingNCs, setIsFetchingNCs] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState('PS'); // Pestaña activa: 'PS' o '5S'
+
+    // Estados para Auditorías PS
+    const [auditsPS, setAuditsPS] = useState([]);
+    const [selectedAuditPS, setSelectedAuditPS] = useState(null);
+    const [nonConformitiesPS, setNonConformitiesPS] = useState([]);
+
+    // Estados para Auditorías 5S
+    const [audits5S, setAudits5S] = useState([]);
+    const [selectedAudit5S, setSelectedAudit5S] = useState(null);
+    const [nonConformities5S, setNonConformities5S] = useState([]);
+
+    // Carga las listas de auditorías cuando cambia la pestaña
+    useEffect(() => {
+        setLoading(true);
+        if (activeTab === 'PS') {
+            firebaseServices.getAllAuditsWithResults()
+                .then(setAuditsPS)
+                .catch(() => toast.error("No se pudieron cargar las auditorías PS."))
+                .finally(() => setLoading(false));
+        } else if (activeTab === '5S') {
+            firebaseServices.getAllAuditorias5S()
+                .then(setAudits5S)
+                .catch(() => toast.error("No se pudieron cargar las auditorías 5S."))
+                .finally(() => setLoading(false));
+        }
+    }, [activeTab]);
+
+    // Carga las NCs cuando se selecciona una auditoría
+    useEffect(() => {
+        if (selectedAuditPS) {
+            const ncs = selectedAuditPS.resultados.filter(r => r.resultado === 'NC');
+            setNonConformitiesPS(ncs);
+        }
+    }, [selectedAuditPS]);
 
     useEffect(() => {
-        const fetchAudits = async () => {
-            setLoading(true);
-            try {
-                const allAudits = await firebaseServices.getAllAuditsWithResults();
-                setAudits(allAudits);
-            } catch (error) {
-                toast.error("No se pudieron cargar las auditorías.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchAudits();
-    }, []);
+        if (selectedAudit5S) {
+            firebaseServices.getNCsForAuditoria5S(selectedAudit5S.id).then(setNonConformities5S);
+        }
+    }, [selectedAudit5S]);
 
-    useEffect(() => {
-        const fetchNCs = async () => {
-            if (!selectedAudit) {
-                setNonConformities([]);
-                return;
-            }
-            setIsFetchingNCs(true);
-            try {
-                const ncs = selectedAudit.resultados.filter(r => r.resultado === 'NC');
-                const enrichedNcsPromises = ncs.map(async (nc) => {
-                    const reqData = await firebaseServices.getSingleRequirement(nc.pilarId, nc.estandarId, nc.requisitoId);
-                    const planData = await firebaseServices.getActionPlan(nc.id);
-                    return {
-                        ...nc,
-                        requerimientoOperacional: reqData ? reqData.requerimientoOperacional : 'No se encontró el requerimiento.',
-                        planStatus: planData ? planData.estado : 'pendiente',
-                    };
-                });
-                const enrichedNcs = await Promise.all(enrichedNcsPromises);
-                setNonConformities(enrichedNcs);
-            } catch (error) {
-                toast.error("No se pudieron cargar las no conformidades.");
-                console.error(error);
-            } finally {
-                setIsFetchingNCs(false);
-            }
-        };
-        fetchNCs();
-    }, [selectedAudit]);
-
-    const handleAuditChange = (e) => {
+    const handleAuditChangePS = (e) => {
         const auditId = e.target.value;
-        const audit = audits.find(a => a.id === auditId);
-        setSelectedAudit(audit);
+        setSelectedAuditPS(auditsPS.find(a => a.id === auditId));
+    };
+
+    const handleAuditChange5S = (e) => {
+        const auditId = e.target.value;
+        setSelectedAudit5S(audits5S.find(a => a.id === auditId));
     };
 
     return (
         <ProtectedRoute allowedRoles={['administrador', 'auditor', 'colaborador']}>
             <div className="audits-panel-container">
                 <h1>Panel de Planes de Acción</h1>
-                <div className="card">
-                <div className="form-group">
-                    <label htmlFor="audit-select">Selecciona una Auditoría para ver sus No Conformidades</label>
-                    <select
-                        id="audit-select" // <-- AÑADE ESTE ID
-                        value={selectedAudit?.id || ''}
-                        onChange={handleAuditChange}
-                        disabled={loading}
-                        >
-                            <option value="">-- Elige una auditoría --</option>
-                            {audits.map(audit => (
-                                // --- LA CORRECCIÓN CLAVE ESTÁ AQUÍ ---
-                                <option key={audit.id} value={audit.id}>
-                                    {audit.numeroAuditoria} - {audit.lugar} ({audit.estado})
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+
+                <div className="tabs">
+                    <button className={`tab-button ${activeTab === 'PS' ? 'active' : ''}`} onClick={() => setActiveTab('PS')}>
+                        Auditorías Power Service
+                    </button>
+                    <button className={`tab-button ${activeTab === '5S' ? 'active' : ''}`} onClick={() => setActiveTab('5S')}>
+                        Auditorías 5S
+                    </button>
                 </div>
 
-                {isFetchingNCs && <div className="loading-spinner">Cargando no conformidades...</div>}
-                
-                {!isFetchingNCs && selectedAudit && nonConformities.length > 0 && (
-                    <div className="requisito-list-container">
-                        <h3>No Conformidades Encontradas</h3>
-                        <div className="requisito-list">
-                            {nonConformities.map(nc => (
-                                <Link to={`/plan-de-accion/${nc.id}`} key={nc.id} className="requisito-item status-NC" style={{ display: 'block', color: 'inherit', marginBottom: '1rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                        <strong>Requisito: {nc.requisitoId}</strong>
-                                        <span className={`status-badge status-${nc.planStatus}`}>
-                                            {nc.planStatus.replace('_', ' ')}
-                                        </span>
-                                    </div>
-                                    <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9em', color: 'var(--text-color)' }}>{nc.requerimientoOperacional}</p>
-                                    <p style={{ margin: '0 0 0.5rem 0', fontStyle: 'italic', color: 'var(--text-secondary-color)' }}>
-                                        <strong>Comentario:</strong> "{nc.comentarios || 'Sin comentarios'}"
-                                    </p>
-                                    <small style={{ color: 'var(--text-secondary-color)' }}>
-                                        <strong>Auditores:</strong> {selectedAudit.auditores.join(', ')} | 
-                                        <strong> Auditados:</strong> {selectedAudit.auditados.join(', ')} | 
-                                        <strong> Fecha:</strong> {selectedAudit.fechaCreacion.toDate().toLocaleDateString()}
-                                    </small>
-                                </Link>
-                            ))}
+                {loading && <div className="loading-spinner">Cargando...</div>}
+
+                {/* Contenido para la pestaña de Power Service */}
+                {!loading && activeTab === 'PS' && (
+                    <div className="tab-content">
+                        <div className="card">
+                            <div className="form-group">
+                                <label>Selecciona una Auditoría PS para ver sus No Conformidades</label>
+                                <select value={selectedAuditPS?.id || ''} onChange={handleAuditChangePS}>
+                                    <option value="">-- Elige una auditoría --</option>
+                                    {auditsPS.map(audit => (
+                                        <option key={audit.id} value={audit.id}>
+                                            {audit.numeroAuditoria} - {audit.lugar} ({audit.estado})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
+                        {selectedAuditPS && nonConformitiesPS.length > 0 && (
+                             <div className="requisito-list">
+                                {nonConformitiesPS.map(nc => (
+                                    <Link to={`/plan-de-accion/PS/${nc.id}`} key={nc.id} className="requisito-item status-NC">
+                                       <span><strong>{nc.requisitoId}</strong> - {nc.comentarios || "Sin comentarios"}</span>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                         {selectedAuditPS && nonConformitiesPS.length === 0 && <div className="card"><p>¡Excelente! No se encontraron NC en esta auditoría.</p></div>}
                     </div>
                 )}
-
-                {!isFetchingNCs && selectedAudit && nonConformities.length === 0 && (
-                    <div className="card">
-                        <p>¡Excelente! No se encontraron No Conformidades en esta auditoría.</p>
+                
+                {/* Contenido para la pestaña de 5S */}
+                {!loading && activeTab === '5S' && (
+                    <div className="tab-content">
+                         <div className="card">
+                            <div className="form-group">
+                                <label>Selecciona una Auditoría 5S para ver sus No Conformidades</label>
+                                <select value={selectedAudit5S?.id || ''} onChange={handleAuditChange5S}>
+                                    <option value="">-- Elige una auditoría --</option>
+                                    {audits5S.map(audit => (
+                                        <option key={audit.id} value={audit.id}>
+                                            {audit.numeroAuditoria} - {audit.lugar}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                         {selectedAudit5S && nonConformities5S.length > 0 && (
+                             <div className="requisito-list">
+                                {nonConformities5S.map(nc => (
+                                    <Link to={`/plan-de-accion/5S/${nc.id}`} key={nc.id} className="requisito-item status-NC">
+                                       <span><strong>Ítem {nc.itemId}</strong> - {nc.comentarios || "Sin comentarios"}</span>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                        {selectedAudit5S && nonConformities5S.length === 0 && <div className="card"><p>¡Excelente! No se encontraron NC en esta auditoría.</p></div>}
                     </div>
                 )}
             </div>
