@@ -1,11 +1,8 @@
 // src/pages/AuditsPanelPage.jsx
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { firebaseServices } from '../firebase/services';
 import { toast } from 'react-hot-toast';
-import ProtectedRoute from '../components/ProtectedRoute.jsx';
-import { getCachedData, setCachedData } from '../utils/dataCache.js'; // Importamos el caché
 
 const AuditsPanelPage = () => {
     const [audits, setAudits] = useState([]);
@@ -15,42 +12,24 @@ const AuditsPanelPage = () => {
 
     useEffect(() => {
         const fetchAuditsAndData = async () => {
-            const cachedData = getCachedData();
-            if (cachedData) {
-                setAudits(cachedData.audits);
-                setTotalRequisitos(cachedData.totalRequisitos);
-                setLoading(false);
-            }
-
+            setLoading(true);
             try {
                 const allAudits = await firebaseServices.getAllAuditsWithResults();
-                const checklist = await firebaseServices.getFullChecklist();
-                
-                let count = 0;
-                if (checklist && Object.keys(checklist).length > 0) {
-                    Object.values(checklist).forEach(pilar => {
-                        if (pilar.estandares) {
-                            Object.values(pilar.estandares).forEach(estandar => {
-                                if (estandar.requisitos) count += estandar.requisitos.length;
-                            });
-                        }
-                    });
-                }
-                
                 setAudits(allAudits);
+
+                const checklist = await firebaseServices.getFullChecklist();
+                let count = 0;
+                Object.values(checklist).forEach(pilar => {
+                    Object.values(pilar.estandares).forEach(estandar => {
+                        count += estandar.requisitos.length;
+                    });
+                });
                 setTotalRequisitos(count);
-
-                // Guardamos en caché para la próxima vez (necesitamos los actionPlans también)
-                const actionPlans = await firebaseServices.getAllActionPlans();
-                setCachedData({ audits: allAudits, totalRequisitos: count, actionPlans, fullChecklist: checklist });
-
             } catch (error) {
-                toast.error("No se pudieron sincronizar las auditorías.");
+                toast.error("No se pudieron cargar las auditorías.");
                 console.error(error);
             } finally {
-                if (!cachedData) {
-                    setLoading(false);
-                }
+                setLoading(false);
             }
         };
         fetchAuditsAndData();
@@ -65,61 +44,59 @@ const AuditsPanelPage = () => {
     if (loading) return <div className="loading-spinner">Cargando panel...</div>;
 
     return (
-        <ProtectedRoute allowedRoles={['administrador', 'auditor']}>
-            <div className="audits-panel-container">
-                <h1>Panel de Auditorías</h1>
-                <div className="audits-table-container card">
-                    <table className="audits-table">
-                        <thead>
-                            <tr>
-                                <th>Nº Auditoría</th>
-                                <th>Lugar</th>
-                                <th>Auditores</th>
-                                <th>Auditados</th>
-                                <th>Pilares Auditados</th>
-                                <th>Progreso</th>
-                                <th>Fecha Inicio</th>
-                                <th>Fecha Cierre</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {audits.map(audit => {
-                                const progress = totalRequisitos > 0 ? (audit.resultados.length / totalRequisitos) * 100 : 0;
-                                return (
-                                    <tr key={audit.id}>
-                                        <td>{audit.numeroAuditoria}</td>
-                                        <td>{audit.lugar}</td>
-                                        <td>{audit.auditores ? audit.auditores.join(', ') : 'N/A'}</td>
-                                        <td>{audit.auditados ? audit.auditados.join(', ') : 'N/A'}</td>
-                                        <td>{getAuditedPilares(audit.resultados)}</td>
-                                        <td>
-                                            <span>{audit.resultados.length} / {totalRequisitos}</span>
-                                            <div className="progress-bar">
-                                                <div className="progress-bar-inner" style={{ width: `${progress}%` }}></div>
-                                            </div>
-                                        </td>
-                                        <td>{audit.fechaCreacion?.toDate().toLocaleDateString()}</td>
-                                        <td>{audit.fechaCierre?.toDate().toLocaleDateString() || 'N/A'}</td>
-                                        <td>
-                                            <span className={`status-badge status-${audit.estado}`}>
-                                                {audit.estado === 'abierta' ? 'Abierta' : 'Cerrada'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <button className="btn btn-primary" onClick={() => navigate(`/audit/${audit.id}`)}>
-                                                {audit.estado === 'abierta' ? 'Continuar' : 'Ver'}
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+        <div className="audits-panel-container">
+            <h1>Panel de Auditorías</h1>
+            <div className="audits-table-container card">
+                <table className="audits-table">
+                    <thead>
+                        <tr>
+                            <th>Nº Auditoría</th>
+                            <th>Lugar</th>
+                            <th>Auditores</th>
+                            <th>Auditados</th>
+                            <th>Pilares Auditados</th>
+                            <th>Progreso</th>
+                            <th>Fecha Inicio</th>
+                            <th>Fecha Cierre</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {audits.map(audit => {
+                            const progress = totalRequisitos > 0 ? (audit.resultados.length / totalRequisitos) * 100 : 0;
+                            return (
+                                <tr key={audit.id}>
+                                    <td>{audit.numeroAuditoria}</td>
+                                    <td>{audit.lugar}</td>
+                                    <td>{audit.auditores ? audit.auditores.join(', ') : 'N/A'}</td>
+                                    <td>{audit.auditados ? audit.auditados.join(', ') : 'N/A'}</td>
+                                    <td>{getAuditedPilares(audit.resultados)}</td>
+                                    <td>
+                                        <span>{audit.resultados.length} / {totalRequisitos}</span>
+                                        <div className="progress-bar">
+                                            <div className="progress-bar-inner" style={{ width: `${progress}%` }}></div>
+                                        </div>
+                                    </td>
+                                    <td>{audit.fechaCreacion?.toDate().toLocaleDateString()}</td>
+                                    <td>{audit.fechaCierre?.toDate().toLocaleDateString() || 'N/A'}</td>
+                                    <td>
+                                        <span className={`status-badge status-${audit.estado}`}>
+                                            {audit.estado === 'abierta' ? 'Abierta' : 'Cerrada'}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button className="btn btn-primary" onClick={() => navigate(`/audit/${audit.id}`)}>
+                                            {audit.estado === 'abierta' ? 'Continuar' : 'Ver'}
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
-        </ProtectedRoute>
+        </div>
     );
 };
 
