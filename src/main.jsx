@@ -3,27 +3,25 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 
 import App from './App.jsx';
+import Layout from './components/Layout.jsx'; // Importamos Layout aquí
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { ThemeProvider } from './contexts/ThemeContext.jsx';
 
 import './index.css';
 import './App.css';
 
-// Registrar Service Worker (si quieres mantener la funcionalidad PWA)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js');
-  });
-}
-
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
+          <Layout> {/* <-- Layout ahora envuelve a App */}
             <App />
+            <Toaster position="bottom-right" />
+          </Layout>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
