@@ -456,3 +456,31 @@ h1, h2, h3, h4 {
   color: var(--text-secondary-color);
   margin-bottom: 0.25rem;
 }
+/* --- Estilos para Informe Interactivo --- */
+.evidence-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.evidence-thumbnail {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid var(--border-color);
+  transition: transform 0.2s;
+}
+
+.evidence-thumbnail:hover {
+  transform: scale(1.1);
+  border-color: var(--primary-color);
+}
+
+/* Ocultamos el header y botón al imprimir esta vista */
+@media print {
+    .header, .report-header button {
+        display: none !important;
+    }
+}
