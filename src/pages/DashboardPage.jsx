@@ -1,11 +1,11 @@
 // src/pages/DashboardPage.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { firebaseServices } from '../firebase/services';
 import { toast } from 'react-hot-toast';
-import { exportToPDF, exportToXLS } from '../utils/exportUtils';
+import { exportToPDF, exportToXLS, exportToPDF5S } from '../utils/exportUtils.js';
 
 const DashboardPage = () => {
     const [loading, setLoading] = useState(true);
@@ -22,6 +22,7 @@ const DashboardPage = () => {
     const [selectedPilar, setSelectedPilar] = useState('');
     const [selectedRequisito, setSelectedRequisito] = useState('');
     const [selectedPeriod, setSelectedPeriod] = useState('6m');
+    const [selectedAudit5SId, setSelectedAudit5SId] = useState('');
     
     const navigate = useNavigate();
 
@@ -154,55 +155,46 @@ const DashboardPage = () => {
         <div className="dashboard-container">
             <h1>Dashboard de Resultados</h1>
             
+            {/* --- SECCIÓN 1: RESUMEN GENERAL PS --- */}
             <div className="dashboard-section">
-                <h3>Resumen General</h3>
+                <h3>Resumen General Power Service</h3>
                 <div className="stats-grid">
-                    <div className="stat-card">
-                        <h4>Conformes (C)</h4>
-                        <div className="value C">{stats.C}</div>
-                    </div>
-                    <div className="stat-card">
-                        <h4>No Conformes (NC)</h4>
-                        <div className="value NC">{stats.NC}</div>
-                    </div>
-                    <div className="stat-card">
-                        <h4>No Observados (NO)</h4>
-                        <div className="value NO">{stats.NO}</div>
-                    </div>
-                    <div className="stat-card card-link" onClick={() => navigate('/planes-de-accion')}>
-                        <h4>Planes Pendientes</h4>
-                        <div className="value" style={{ color: 'var(--warning-color)' }}>{stats.pendiente}</div>
-                    </div>
+                    <div className="stat-card"><h4>Conformes (C)</h4><div className="value C">{stats.C}</div></div>
+                    <div className="stat-card"><h4>No Conformes (NC)</h4><div className="value NC">{stats.NC}</div></div>
+                    <div className="stat-card"><h4>No Observados (NO)</h4><div className="value NO">{stats.NO}</div></div>
+                    <div className="stat-card"><h4>NC Cerradas</h4><div className="value" style={{ color: COLORS["NC Cerrada"] }}>{stats["NC Cerrada"]}</div></div>
                 </div>
                 <div className="stats-grid" style={{marginTop: '1rem'}}>
-                    <div className="stat-card">
-                        <h4>Planes en Progreso</h4>
-                        <div className="value" style={{ color: 'var(--primary-color)' }}>{stats.en_progreso}</div>
+                    <div className="stat-card card-link" onClick={() => navigate('/planes-de-accion')}>
+                        <h4>Planes PS Pendientes</h4>
+                        <div className="value" style={{ color: 'var(--warning-color)' }}>{stats.pendiente}</div>
                     </div>
-                    <div className="stat-card">
-                        <h4>Planes Completados</h4>
-                        <div className="value C">{stats.completado}</div>
-                    </div>
+                    <div className="stat-card"><h4>Planes PS en Progreso</h4><div className="value" style={{ color: 'var(--primary-color)' }}>{stats.en_progreso}</div></div>
+                    <div className="stat-card"><h4>Planes PS Completados</h4><div className="value C">{stats.completado}</div></div>
                 </div>
             </div>
 
+            {/* --- SECCIÓN 2: RESULTADOS POR AUDITORÍA PS --- */}
             <div className="dashboard-section">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                    <h3>Resultados por Auditoría</h3>
+                    <h3>Resultados por Auditoría PS</h3>
                     <div style={{ display: 'flex', gap: '1rem' }}>
+                        <Link to={`/informe-interactivo/ps/${selectedAuditId}`} className={`btn btn-secondary ${!selectedAuditId ? 'disabled' : ''}`}>
+                            Ver Informe Interactivo
+                        </Link>
                         <button className="btn btn-secondary" onClick={() => exportToPDF(selectedAuditForExport, fullChecklist)} disabled={!selectedAuditId}>Exportar a PDF</button>
                         <button className="btn btn-secondary" onClick={() => exportToXLS(selectedAuditForExport, fullChecklist)} disabled={!selectedAuditId}>Exportar a XLS</button>
                     </div>
                 </div>
                 <div className="dashboard-filters">
                     <select value={selectedAuditId} onChange={e => setSelectedAuditId(e.target.value)}>
-                        <option value="">Selecciona una auditoría...</option>
+                        <option value="">Selecciona una auditoría PS...</option>
                         {allAudits.map(a => <option key={a.id} value={a.id}>{a.numeroAuditoria} - {a.lugar}</option>)}
                     </select>
                 </div>
                 <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
-                        <Pie data={auditPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percentage }) => `${name}: ${percentage}%`}>
+                        <Pie data={auditPieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, value, percentage }) => `${name}: ${value} (${percentage}%)`}>
                             {auditPieData.map((entry) => <Cell key={`cell-${entry.name}`} fill={COLORS[entry.name]} />)}
                         </Pie>
                         <Tooltip formatter={(value, name, props) => `${value} (${props.payload.percentage}%)`} />
@@ -211,44 +203,70 @@ const DashboardPage = () => {
                 </ResponsiveContainer>
             </div>
             
+            {/* --- SECCIÓN 3: HISTORIAL Y COMPARATIVA PS --- */}
             <div className="dashboard-grid">
                 <div className="dashboard-section">
-                    <h3>Historial por Requisito</h3>
+                    <h3>Historial por Requisito PS</h3>
                     <div className="dashboard-filters">
-                        <select value={selectedPilar} onChange={e => setSelectedPilar(e.target.value)}><option value="">Pilar</option>{pilaresList.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
-                        <select value={selectedRequisito} onChange={e => setSelectedRequisito(e.target.value)} disabled={!selectedPilar}><option value="">Requisito</option>{requisitosList.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}</select>
-                        <select value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)}><option value="6m">Últimos 6 meses</option><option value="1y">Último año</option></select>
-                    </div>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={requirementHistoryData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /></BarChart>
-                    </ResponsiveContainer>
+                    <select value={selectedPilar} onChange={e => setSelectedPilar(e.target.value)}><option value="">Pilar</option>{pilaresList.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select>
+                    <select value={selectedRequisito} onChange={e => setSelectedRequisito(e.target.value)} disabled={!selectedPilar}><option value="">Requisito</option>{requisitosList.map(r => <option key={r.id} value={r.id}>{r.id}</option>)}</select>
+                    <select value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value)}><option value="6m">Últimos 6 meses</option><option value="1y">Último año</option></select>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={requirementHistoryData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /></BarChart>
+                </ResponsiveContainer>
                 </div>
 
                 <div className="dashboard-section">
-                    <h3>Comparativa por Sucursal</h3>
+                    <h3>Comparativa por Sucursal PS</h3>
                     <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={branchComparisonData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /></BarChart>
-                    </ResponsiveContainer>
+                    <BarChart data={branchComparisonData}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="C" stackId="a" fill={COLORS.C} name="Conforme" /><Bar dataKey="NC" stackId="a" fill={COLORS.NC} name="No Conforme" /><Bar dataKey="NO" stackId="a" fill={COLORS.NO} name="No Observado" /></BarChart>
+                </ResponsiveContainer>
                 </div>
+            </div>
 
-                {/* --- NUEVA SECCIÓN PARA AUDITORÍAS 5S --- */}
-                <div className="dashboard-section">
-                    <h3>Indicadores de Auditoría 5S</h3>
-                    <div className="stats-grid">
-                        <div className="stat-card">
-                            <h4>Promedio Conformidad</h4>
-                            <div className="value C">{stats5S.promedio}%</div>
-                        </div>
-                        <div className="stat-card">
-                            <h4>Total No Conformes</h4>
-                            <div className="value NC">{stats5S.totalNC}</div>
-                        </div>
-                        <div className="stat-card card-link" onClick={() => navigate('/planes-de-accion')}>
-                            <h4>Planes 5S sin Cerrar</h4>
-                            <div className="value" style={{ color: 'var(--warning-color)' }}>{stats5S.planesAbiertos}</div>
-                        </div>
+            {/* --- SECCIÓN 4: RESUMEN GENERAL 5S --- */}
+            <div className="dashboard-section">
+                <h3>Resumen General Auditoría 5S</h3>
+                <div className="stats-grid">
+                    <div className="stat-card"><h4>Promedio Conformidad</h4><div className="value C">{stats5S.promedio}%</div></div>
+                    <div className="stat-card"><h4>Total No Conformes 5S</h4><div className="value NC">{stats5S.totalNC}</div></div>
+                    <div className="stat-card card-link" onClick={() => navigate('/planes-de-accion')}>
+                        <h4>Planes 5S sin Cerrar</h4>
+                        <div className="value" style={{ color: 'var(--warning-color)' }}>{stats5S.planesAbiertos}</div>
                     </div>
                 </div>
+            </div>
+
+            {/* --- SECCIÓN 5: RESULTADOS POR AUDITORÍA 5S --- */}
+            <div className="dashboard-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                    <h3>Resultados por Auditoría 5S</h3>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                        <Link to={`/informe-grafico-5s/${selectedAudit5SId}`} className={`btn btn-secondary ${!selectedAudit5SId ? 'disabled' : ''}`}>
+                            Ver Informe Gráfico
+                        </Link>
+                        <button 
+                            className="btn btn-secondary" 
+                            onClick={() => {
+                                // Buscamos la auditoría seleccionada justo antes de exportar
+                                const selectedAuditToExport = audits5S.find(a => a.id === selectedAudit5SId);
+                                const checklist5SData = firebaseServices.get5SChecklist();
+                                exportToPDF5S(selectedAuditToExport, checklist5SData);
+                            }} 
+                            disabled={!selectedAudit5SId}
+                        >
+                            Exportar PDF Completo
+                        </button>
+                    </div>
+                </div>
+                <div className="dashboard-filters">
+                    <select value={selectedAudit5SId} onChange={e => setSelectedAudit5SId(e.target.value)}>
+                        <option value="">Selecciona una auditoría 5S...</option>
+                        {audits5S.map(a => <option key={a.id} value={a.id}>{a.numeroAuditoria} - {a.lugar}</option>)}
+                    </select>
+                </div>
+                {/* Aquí podrías añadir un gráfico de torta para la auditoría 5S seleccionada, similar al de PS */}
             </div>
         </div>
     );
