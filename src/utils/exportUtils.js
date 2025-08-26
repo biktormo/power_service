@@ -34,6 +34,11 @@ export const exportToPDF = (audit, checklist) => {
             tableData.push([{ content: `Estándar: ${estandar.descripcion} (${estandar.id})`, colSpan: 4, styles: { fontStyle: 'italic', fillColor: [240, 240, 240] } }]);
             estandar.requisitos.forEach(req => {
                 const result = audit.resultados.find(r => r.requisitoId === req.id);
+                // --- LÓGICA MODIFICADA PARA LA COLUMNA DE RESULTADO ---
+                let resultadoTexto = result?.resultado || 'Pendiente';
+                if (result && result.adjuntos && result.adjuntos.length > 0) {
+                    resultadoTexto += ' (Ver Evidencias)'; // Añadimos la nota
+                }
                 tableData.push([
                     req.id,
                     req.requerimientoOperacional,
@@ -138,4 +143,40 @@ export const exportToXLS = (audit, checklist) => {
   const worksheet = utils.aoa_to_sheet(worksheetData);
   utils.book_append_sheet(workbook, worksheet, "Auditoría");
   writeFile(workbook, `Auditoria_${audit.numeroAuditoria}.xlsx`);
+};
+
+export const exportToPDF5S = (audit, checklist5S) => {
+    if (!audit) {
+        alert("Por favor, selecciona una auditoría 5S para exportar.");
+        return;
+    }
+
+    const doc = new jsPDF();
+    // ... (lógica muy similar a exportToPDF, pero usando los datos de la auditoría 5S)
+    // Se crea la tabla con los items de la checklist 5S y sus resultados.
+    
+    // Header
+    doc.setFontSize(18);
+    doc.text(`Auditoría 5S: ${audit.numeroAuditoria}`, 14, 22);
+    // ... (más detalles)
+
+    // Tabla
+    const tableColumns = ["Ítem", "Descripción", "Resultado", "Comentarios"];
+    const tableData = [];
+    Object.entries(checklist5S).forEach(([seccion, items]) => {
+        tableData.push([{ content: `--- SECCIÓN: ${seccion} ---`, colSpan: 4, styles: { fontStyle: 'bold' } }]);
+        items.forEach(item => {
+            const result = audit.resultados.find(r => r.itemId === item.id);
+            tableData.push([
+                item.id,
+                item.text,
+                result?.resultado || 'Pendiente',
+                result?.comentarios || ''
+            ]);
+        });
+    });
+
+    autoTable(doc, { head: [tableColumns], body: tableData, startY: 60 });
+    
+    doc.save(`Auditoria_5S_${audit.numeroAuditoria}.pdf`);
 };
