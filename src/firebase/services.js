@@ -353,4 +353,19 @@ export const firebaseServices = {
     
         return audits.map(audit => ({ ...audit, resultados: resultsByAudit[audit.id] || [] }));
     },
+
+    getAuditoria5SWithResults: async (auditId) => {
+        if (!auditId) return null;
+        const auditDocRef = doc(db, 'auditorias5S', auditId);
+        const auditDocSnap = await getDoc(auditDocRef);
+        if (!auditDocSnap.exists()) return null;
+    
+        const auditData = { id: auditDocSnap.id, ...auditDocSnap.data() };
+        
+        const resultsQuery = query(collection(db, 'resultados5S'), where('auditoria5SId', '==', auditId));
+        const resultsSnapshot = await getDocs(resultsQuery);
+        const resultados = resultsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+        return { ...auditData, resultados };
+    },
 };
