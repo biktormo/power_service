@@ -225,7 +225,7 @@ export const exportToPDF5S = async (audit, checklist5S) => {
         }
     }
 
-    let finalY_5S = doc.autoTable.previous.finalY || 60;
+    let finalY_5S = (doc.lastAutoTable && doc.lastAutoTable.finalY) || 60;
     doc.addPage();
     finalY_5S = 20;
 
