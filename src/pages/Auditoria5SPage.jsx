@@ -5,84 +5,43 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { firebaseServices } from '../firebase/services';
 import { toast } from 'react-hot-toast';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
-import { serverTimestamp } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 
-// Componente interno para cada ítem de la checklist (actualizado)
-const ChecklistItem = ({ item, seccion, auditoriaId, onResultChange }) => {
-    const [resultado, setResultado] = useState('');
-    const [comentarios, setComentarios] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [file, setFile] = useState(null);
-
-    const handleSave = async () => {
-        if (!resultado) {
-            toast.error("Por favor, selecciona un resultado.");
-            return;
-        }
-        setIsSaving(true);
-        let fileUrl = null;
-
-        try {
-            if (file) {
-                toast.loading("Subiendo archivo...");
-                const path = `audits5S/${auditoriaId}/${item.id}/${Date.now()}_${file.name}`;
-                fileUrl = await firebaseServices.uploadFile(file, path);
-                toast.dismiss();
-            }
-
-            const dataToSave = {
-                auditoria5SId: auditoriaId,
-                itemId: item.id,
-                itemTexto: item.text,
-                seccion: seccion,
-                resultado: resultado,
-                comentarios: comentarios,
-                adjuntos: fileUrl ? [fileUrl] : [], // Guardamos como un array
-            };
-
-            await firebaseServices.saveResultado5S(dataToSave);
-            onResultChange(item.id, dataToSave);
-            toast.success(`Ítem ${item.id} guardado.`);
-        } catch (error) {
-            toast.error("Error al guardar el ítem.");
-            console.error(error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
+// Componente interno simplificado (ahora controlado por el padre)
+const ChecklistItem = ({ item, seccion, data, onChange, onFileChange }) => {
     return (
         <div className="card" style={{ marginBottom: '1rem' }}>
             <p><strong>{item.id}.</strong> {item.text}</p>
             
             <div className="radial-selector-group">
-                <label className={resultado === 'Conforme' ? 'selected' : ''}>
-                    <input type="radio" name={`resultado-${item.id}`} value="Conforme" checked={resultado === 'Conforme'} onChange={(e) => setResultado(e.target.value)} />
-                    Conforme
-                </label>
-                <label className={resultado === 'No Conforme' ? 'selected' : ''}>
-                    <input type="radio" name={`resultado-${item.id}`} value="No Conforme" checked={resultado === 'No Conforme'} onChange={(e) => setResultado(e.target.value)} />
-                    No Conforme
-                </label>
-                <label className={resultado === 'No Observado' ? 'selected' : ''}>
-                    <input type="radio" name={`resultado-${item.id}`} value="No Observado" checked={resultado === 'No Observado'} onChange={(e) => setResultado(e.target.value)} />
-                    No Observado
-                </label>
+                {['Conforme', 'No Conforme', 'No Observado'].map(option => (
+                    <label key={option} className={data.resultado === option ? 'selected' : ''}>
+                        <input 
+                            type="radio" 
+                            name={`res-${item.id}`} 
+                            value={option} 
+                            checked={data.resultado === option} 
+                            onChange={(e) => onChange(item.id, 'resultado', e.target.value)} 
+                        />
+                        {option}
+                    </label>
+                ))}
             </div>
 
             <div className="form-group" style={{ margin: '1rem 0' }}>
-                <textarea placeholder="Comentarios (opcional)..." value={comentarios} onChange={e => setComentarios(e.target.value)} rows="2" />
+                <textarea 
+                    placeholder="Comentarios (opcional)..." 
+                    value={data.comentarios || ''} 
+                    onChange={(e) => onChange(item.id, 'comentarios', e.target.value)} 
+                    rows="2" 
+                />
             </div>
 
             <div className="form-group" style={{ margin: '1rem 0' }}>
                 <label>Adjuntar Archivo / Fotografía</label>
-                <input type="file" onChange={(e) => setFile(e.target.files[0])} />
-            </div>
-
-            <div style={{ textAlign: 'right' }}>
-                <button onClick={handleSave} className="btn btn-secondary" disabled={isSaving || !resultado}>
-                    {isSaving ? "Guardando..." : "Guardar Ítem"}
-                </button>
+                <input type="file" onChange={(e) => onFileChange(item.id, e.target.files[0])} />
+                {data.tempFile && <span style={{fontSize: '0.8em', color: 'green'}}> (Archivo seleccionado para subir)</span>}
+                {data.adjuntos && data.adjuntos.length > 0 && <span style={{fontSize: '0.8em', color: 'blue'}}> ({data.adjuntos.length} archivos guardados)</span>}
             </div>
         </div>
     );
@@ -91,6 +50,7 @@ const ChecklistItem = ({ item, seccion, auditoriaId, onResultChange }) => {
 
 const Auditoria5SPage = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [step, setStep] = useState(1);
     const [auditores, setAuditores] = useState([]);
     const [formData, setFormData] = useState({ 
@@ -99,10 +59,14 @@ const Auditoria5SPage = () => {
         auditor: '' 
     });
     const [currentAuditoriaId, setCurrentAuditoriaId] = useState(null);
-    const [results, setResults] = useState({});
+    
+    // Estado principal: guarda todos los resultados en memoria
+    const [auditData, setAuditData] = useState({});
+    
     const checklist = firebaseServices.get5SChecklist();
     const totalItems = Object.values(checklist).reduce((sum, items) => sum + items.length, 0);
     const [activeTab, setActiveTab] = useState('TALLER');
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         firebaseServices.getAuditores()
@@ -122,6 +86,7 @@ const Auditoria5SPage = () => {
             toast.error("Por favor, completa todos los campos.");
             return;
         }
+        setIsSaving(true);
         try {
             const auditId = await firebaseServices.createAuditoria5S({
                 fecha: new Date(fecha),
@@ -132,29 +97,104 @@ const Auditoria5SPage = () => {
             setStep(2);
         } catch (error) {
             toast.error("No se pudo crear la auditoría.");
+        } finally { setIsSaving(false); }
+    };
+
+    // Actualiza el estado local cuando el usuario interactúa
+    const handleItemChange = (itemId, field, value) => {
+        setAuditData(prev => ({
+            ...prev,
+            [itemId]: { ...prev[itemId], [field]: value }
+        }));
+    };
+
+    const handleFileChange = (itemId, file) => {
+        setAuditData(prev => ({
+            ...prev,
+            [itemId]: { ...prev[itemId], tempFile: file }
+        }));
+    };
+    
+    // --- FUNCIÓN DE GUARDADO MASIVO ---
+    const saveAllProgress = async (finish = false) => {
+        setIsSaving(true);
+        const toastId = toast.loading(finish ? "Finalizando auditoría..." : "Guardando progreso...");
+        
+        try {
+            const promises = [];
+            
+            // Recorremos todos los datos modificados
+            for (const [itemId, data] of Object.entries(auditData)) {
+                // Solo guardamos si hay un resultado seleccionado
+                if (data.resultado) {
+                    let fileUrl = null;
+                    
+                    // Si hay un archivo nuevo seleccionado, lo subimos primero
+                    if (data.tempFile) {
+                        const path = `audits5S/${currentAuditoriaId}/${itemId}/${Date.now()}_${data.tempFile.name}`;
+                        const uploaded = await firebaseServices.uploadFile(data.tempFile, path);
+                        fileUrl = uploaded;
+                    }
+
+                    // Preparamos los adjuntos (existentes + nuevo)
+                    const currentAdjuntos = data.adjuntos || [];
+                    if (fileUrl) currentAdjuntos.push(fileUrl);
+
+                    const itemDef = Object.values(checklist).flat().find(i => i.id === itemId);
+                    const seccion = Object.keys(checklist).find(key => checklist[key].some(i => i.id === itemId));
+
+                    const dataToSave = {
+                        auditoria5SId: currentAuditoriaId,
+                        itemId: itemId,
+                        itemTexto: itemDef ? itemDef.text : '',
+                        seccion: seccion,
+                        resultado: data.resultado,
+                        comentarios: data.comentarios || '',
+                        adjuntos: currentAdjuntos
+                    };
+
+                    // Añadimos la promesa de guardado a la lista
+                    promises.push(firebaseServices.saveResultado5S(dataToSave));
+                }
+            }
+
+            // Esperamos a que todo se guarde
+            await Promise.all(promises);
+
+            // Limpiamos los archivos temporales del estado ya que se subieron
+            setAuditData(prev => {
+                const newData = { ...prev };
+                Object.keys(newData).forEach(key => { delete newData[key].tempFile; });
+                return newData;
+            });
+
+            toast.success(finish ? "Auditoría finalizada." : "Progreso guardado.", { id: toastId });
+            
+            if (finish) {
+                navigate('/dashboard');
+            }
+        } catch (error) {
             console.error(error);
+            toast.error("Error al guardar.", { id: toastId });
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleResultChange = (itemId, data) => {
-        setResults(prev => ({ ...prev, [itemId]: data }));
-    };
-    
+    // Cálculos para el resumen
     const finalResult = () => {
-        const auditados = Object.values(results).filter(r => r.resultado === 'Conforme' || r.resultado === 'No Conforme');
-        if (auditados.length === 0) return { total: 0, conformes: 0, noConformes: 0, porcentaje: 0 };
-        
+        const auditados = Object.values(auditData).filter(r => r.resultado === 'Conforme' || r.resultado === 'No Conforme');
+        const totalAuditados = auditados.length;
         const conformes = auditados.filter(r => r.resultado === 'Conforme').length;
-        const porcentaje = (conformes / auditados.length) * 100;
+        const porcentaje = totalAuditados > 0 ? (conformes / totalAuditados) * 100 : 0;
         
         return {
-            total: auditados.length,
+            total: totalAuditados,
             conformes: conformes,
-            noConformes: auditados.length - conformes,
-            porcentaje: isNaN(porcentaje) ? 0 : porcentaje.toFixed(1)
+            noConformes: totalAuditados - conformes,
+            porcentaje: porcentaje.toFixed(1)
         };
     };
-
     const resultadoFinal = finalResult();
 
     if (step === 1) {
@@ -185,7 +225,9 @@ const Auditoria5SPage = () => {
                                 ))}
                             </select>
                         </div>
-                        <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }}>Comenzar Auditoría 5S</button>
+                        <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isSaving}>
+                            {isSaving ? 'Creando...' : 'Comenzar Auditoría 5S'}
+                        </button>
                     </form>
                 </div>
             </ProtectedRoute>
@@ -197,8 +239,17 @@ const Auditoria5SPage = () => {
             <div className="audit-page-container">
                 <div className="audit-page-header">
                     <h1>Auditoría 5S en Curso</h1>
-                    <p>{formData.lugar} - {new Date(formData.fecha).toLocaleDateString()}</p>
+                    <div style={{display: 'flex', gap: '10px'}}>
+                         <button onClick={() => saveAllProgress(false)} className="btn btn-secondary" disabled={isSaving}>
+                            {isSaving ? 'Guardando...' : 'Guardar Progreso'}
+                        </button>
+                        {/* Botón Salir/Volver al panel */}
+                         <button onClick={() => navigate('/dashboard')} className="btn btn-danger">
+                            Salir
+                        </button>
+                    </div>
                 </div>
+                <p><strong>Lugar:</strong> {formData.lugar} | <strong>Fecha:</strong> {new Date(formData.fecha).toLocaleDateString()}</p>
                 
                 <div className="tabs">
                     {Object.keys(checklist).map(seccion => (
@@ -219,18 +270,20 @@ const Auditoria5SPage = () => {
                             item={item} 
                             seccion={activeTab} 
                             auditoriaId={currentAuditoriaId} 
-                            onResultChange={handleResultChange}
+                            data={auditData[item.id] || {}} // Pasamos los datos del estado local
+                            onChange={handleItemChange}
+                            onFileChange={handleFileChange}
                         />
                     ))}
                 </div>
                 
                 <div className="dashboard-section" style={{ marginTop: '2rem', borderColor: 'var(--primary-color)' }}>
-                    <h3>Resultado Final</h3>
+                    <h3>Resumen Parcial</h3>
                     <p>Porcentaje de Conformidad: <strong>{resultadoFinal.porcentaje}%</strong></p>
                     <p>Puntos Auditados: {resultadoFinal.total} / {totalItems}</p>
-                    <p>Conformes: {resultadoFinal.conformes}</p>
-                    <p>No Conformes: {resultadoFinal.noConformes}</p>
-                    {/* Aquí iría un botón para "Finalizar y Guardar Resultado" */}
+                    <button onClick={() => saveAllProgress(true)} className="btn btn-primary" style={{width: '100%', marginTop: '1rem'}} disabled={isSaving}>
+                        Finalizar y Cerrar Auditoría
+                    </button>
                 </div>
             </div>
         </ProtectedRoute>
