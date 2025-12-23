@@ -5,52 +5,50 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { firebaseServices } from '../firebase/services';
 import { toast } from 'react-hot-toast';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
-import { useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom'; // Importamos useParams y useNavigate
 
-// Componente interno simplificado (ahora controlado por el padre)
+// Componente interno (sin cambios)
 const ChecklistItem = ({ item, seccion, data, onChange, onFileChange }) => {
     return (
         <div className="card" style={{ marginBottom: '1rem' }}>
             <p><strong>{item.id}.</strong> {item.text}</p>
-            
             <div className="radial-selector-group">
                 {['Conforme', 'No Conforme', 'No Observado'].map(option => (
-                    <label key={option} className={data.resultado === option ? 'selected' : ''}>
+                    <label key={option} className={data?.resultado === option ? 'selected' : ''}>
                         <input 
                             type="radio" 
                             name={`res-${item.id}`} 
                             value={option} 
-                            checked={data.resultado === option} 
+                            checked={data?.resultado === option} 
                             onChange={(e) => onChange(item.id, 'resultado', e.target.value)} 
                         />
                         {option}
                     </label>
                 ))}
             </div>
-
             <div className="form-group" style={{ margin: '1rem 0' }}>
                 <textarea 
                     placeholder="Comentarios (opcional)..." 
-                    value={data.comentarios || ''} 
+                    value={data?.comentarios || ''} 
                     onChange={(e) => onChange(item.id, 'comentarios', e.target.value)} 
                     rows="2" 
                 />
             </div>
-
             <div className="form-group" style={{ margin: '1rem 0' }}>
                 <label>Adjuntar Archivo / Fotografía</label>
                 <input type="file" onChange={(e) => onFileChange(item.id, e.target.files[0])} />
-                {data.tempFile && <span style={{fontSize: '0.8em', color: 'green'}}> (Archivo seleccionado para subir)</span>}
-                {data.adjuntos && data.adjuntos.length > 0 && <span style={{fontSize: '0.8em', color: 'blue'}}> ({data.adjuntos.length} archivos guardados)</span>}
+                {data?.tempFile && <span style={{fontSize: '0.8em', color: 'green'}}> (Archivo seleccionado)</span>}
+                {data?.adjuntos && data.adjuntos.length > 0 && <span style={{fontSize: '0.8em', color: 'blue'}}> ({data.adjuntos.length} archivos)</span>}
             </div>
         </div>
     );
 };
 
-
 const Auditoria5SPage = () => {
     const { user } = useAuth();
+    const { auditId } = useParams(); // Obtenemos el ID de la URL si existe
     const navigate = useNavigate();
+
     const [step, setStep] = useState(1);
     const [auditores, setAuditores] = useState([]);
     const [formData, setFormData] = useState({ 
@@ -59,21 +57,61 @@ const Auditoria5SPage = () => {
         auditor: '' 
     });
     const [currentAuditoriaId, setCurrentAuditoriaId] = useState(null);
-    
-    // Estado principal: guarda todos los resultados en memoria
-    const [auditData, setAuditData] = useState({});
-    
+    const [auditData, setAuditData] = useState({}); // Estado de los resultados
+    const [loading, setLoading] = useState(false); // Nuevo estado de carga
+
     const checklist = firebaseServices.get5SChecklist();
     const totalItems = Object.values(checklist).reduce((sum, items) => sum + items.length, 0);
     const [activeTab, setActiveTab] = useState('TALLER');
     const [isSaving, setIsSaving] = useState(false);
 
+    // Cargar lista de auditores (siempre)
     useEffect(() => {
         firebaseServices.getAuditores()
             .then(auditoresList => setAuditores(auditoresList || []))
             .catch(() => toast.error("No se pudo cargar la lista de auditores."));
     }, []);
-    
+
+    // --- LÓGICA DE CARGA DE AUDITORÍA EXISTENTE ---
+    useEffect(() => {
+        if (auditId) {
+            setLoading(true);
+            // Si hay ID en la URL, cargamos la auditoría
+            const loadAudit = async () => {
+                try {
+                    const auditFullData = await firebaseServices.getAuditoria5SWithResults(auditId);
+                    if (auditFullData) {
+                        // Rellenamos el formulario con los datos cargados
+                        setFormData({
+                            fecha: auditFullData.fecha.toDate().toISOString().split('T')[0],
+                            lugar: auditFullData.lugar,
+                            auditor: auditFullData.auditor
+                        });
+                        setCurrentAuditoriaId(auditId);
+                        
+                        // Transformamos los resultados al formato del estado auditData
+                        const loadedResults = {};
+                        auditFullData.resultados.forEach(res => {
+                            loadedResults[res.itemId] = res;
+                        });
+                        setAuditData(loadedResults);
+                        
+                        setStep(2); // Saltamos directamente al paso 2 (checklist)
+                    } else {
+                        toast.error("Auditoría no encontrada.");
+                        navigate('/audits/panel');
+                    }
+                } catch (error) {
+                    console.error(error);
+                    toast.error("Error al cargar la auditoría.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+            loadAudit();
+        }
+    }, [auditId, navigate]);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -88,19 +126,18 @@ const Auditoria5SPage = () => {
         }
         setIsSaving(true);
         try {
-            const auditId = await firebaseServices.createAuditoria5S({
+            const newAuditId = await firebaseServices.createAuditoria5S({
                 fecha: new Date(fecha),
                 lugar,
                 auditor
             }, user.uid);
-            setCurrentAuditoriaId(auditId);
+            setCurrentAuditoriaId(newAuditId);
             setStep(2);
         } catch (error) {
             toast.error("No se pudo crear la auditoría.");
         } finally { setIsSaving(false); }
     };
 
-    // Actualiza el estado local cuando el usuario interactúa
     const handleItemChange = (itemId, field, value) => {
         setAuditData(prev => ({
             ...prev,
@@ -115,30 +152,23 @@ const Auditoria5SPage = () => {
         }));
     };
     
-    // --- FUNCIÓN DE GUARDADO MASIVO ---
     const saveAllProgress = async (finish = false) => {
         setIsSaving(true);
         const toastId = toast.loading(finish ? "Finalizando auditoría..." : "Guardando progreso...");
-        
         try {
             const promises = [];
-            
-            // Recorremos todos los datos modificados
             for (const [itemId, data] of Object.entries(auditData)) {
-                // Solo guardamos si hay un resultado seleccionado
-                if (data.resultado) {
+                if (data.resultado) { // Solo guardamos si hay resultado (o si ha cambiado)
                     let fileUrl = null;
-                    
-                    // Si hay un archivo nuevo seleccionado, lo subimos primero
                     if (data.tempFile) {
                         const path = `audits5S/${currentAuditoriaId}/${itemId}/${Date.now()}_${data.tempFile.name}`;
-                        const uploaded = await firebaseServices.uploadFile(data.tempFile, path);
-                        fileUrl = uploaded;
+                        fileUrl = await firebaseServices.uploadFile(data.tempFile, path);
                     }
-
-                    // Preparamos los adjuntos (existentes + nuevo)
                     const currentAdjuntos = data.adjuntos || [];
-                    if (fileUrl) currentAdjuntos.push(fileUrl);
+                    if (fileUrl) currentAdjuntos.push(fileUrl); // Añadimos la nueva URL si existe
+
+                    // Si estamos cargando datos existentes, data.url ya es un objeto, cuidado con duplicar
+                    // Aquí simplificamos: solo subimos si hay tempFile.
 
                     const itemDef = Object.values(checklist).flat().find(i => i.id === itemId);
                     const seccion = Object.keys(checklist).find(key => checklist[key].some(i => i.id === itemId));
@@ -150,18 +180,14 @@ const Auditoria5SPage = () => {
                         seccion: seccion,
                         resultado: data.resultado,
                         comentarios: data.comentarios || '',
-                        adjuntos: currentAdjuntos
+                        adjuntos: currentAdjuntos // Usamos el array actualizado
                     };
-
-                    // Añadimos la promesa de guardado a la lista
                     promises.push(firebaseServices.saveResultado5S(dataToSave));
                 }
             }
-
-            // Esperamos a que todo se guarde
             await Promise.all(promises);
-
-            // Limpiamos los archivos temporales del estado ya que se subieron
+            
+            // Limpiamos tempFiles
             setAuditData(prev => {
                 const newData = { ...prev };
                 Object.keys(newData).forEach(key => { delete newData[key].tempFile; });
@@ -169,33 +195,27 @@ const Auditoria5SPage = () => {
             });
 
             toast.success(finish ? "Auditoría finalizada." : "Progreso guardado.", { id: toastId });
-            
-            if (finish) {
-                navigate('/dashboard');
-            }
+            if (finish) navigate('/dashboard');
         } catch (error) {
             console.error(error);
             toast.error("Error al guardar.", { id: toastId });
-        } finally {
-            setIsSaving(false);
-        }
+        } finally { setIsSaving(false); }
     };
 
-    // Cálculos para el resumen
     const finalResult = () => {
-        const auditados = Object.values(auditData).filter(r => r.resultado === 'Conforme' || r.resultado === 'No Conforme');
+        const auditados = Object.values(auditData).filter(r => r.resultado === 'Conforme' || r.resultado === 'No Conforme' || r.resultado === 'No Observado');
         const totalAuditados = auditados.length;
         const conformes = auditados.filter(r => r.resultado === 'Conforme').length;
+        // Calculamos porcentaje sobre auditados
         const porcentaje = totalAuditados > 0 ? (conformes / totalAuditados) * 100 : 0;
-        
         return {
             total: totalAuditados,
-            conformes: conformes,
-            noConformes: totalAuditados - conformes,
             porcentaje: porcentaje.toFixed(1)
         };
     };
     const resultadoFinal = finalResult();
+
+    if (loading) return <div className="loading-spinner">Cargando auditoría...</div>;
 
     if (step === 1) {
         return (
@@ -203,31 +223,10 @@ const Auditoria5SPage = () => {
                 <div className="new-audit-container">
                     <h1>Nueva Auditoría 5S</h1>
                     <form onSubmit={handleStartAudit} className="card">
-                        <div className="form-group">
-                            <label htmlFor="fecha">Fecha de Auditoría</label>
-                            <input type="date" id="fecha" name="fecha" value={formData.fecha} onChange={handleChange} required />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="lugar">Lugar / Sucursal</label>
-                            <select id="lugar" name="lugar" value={formData.lugar} onChange={handleChange} required>
-                                <option value="" disabled>Selecciona una sucursal...</option>
-                                <option value="Charata">Charata</option>
-                                <option value="Bandera">Bandera</option>
-                                <option value="Quimili">Quimili</option>
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="auditor">Auditor 5S</label>
-                            <select id="auditor" name="auditor" value={formData.auditor} onChange={handleChange} required>
-                                <option value="" disabled>Selecciona un auditor...</option>
-                                {auditores.map(auditorName => (
-                                    <option key={auditorName} value={auditorName}>{auditorName}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isSaving}>
-                            {isSaving ? 'Creando...' : 'Comenzar Auditoría 5S'}
-                        </button>
+                        <div className="form-group"><label htmlFor="fecha">Fecha de Auditoría</label><input type="date" id="fecha" name="fecha" value={formData.fecha} onChange={handleChange} required /></div>
+                        <div className="form-group"><label htmlFor="lugar">Lugar / Sucursal</label><select id="lugar" name="lugar" value={formData.lugar} onChange={handleChange} required><option value="" disabled>Selecciona una sucursal...</option><option value="Charata">Charata</option><option value="Bandera">Bandera</option><option value="Quimili">Quimili</option></select></div>
+                        <div className="form-group"><label htmlFor="auditor">Auditor 5S</label><select id="auditor" name="auditor" value={formData.auditor} onChange={handleChange} required><option value="" disabled>Selecciona un auditor...</option>{auditores.map(auditorName => (<option key={auditorName} value={auditorName}>{auditorName}</option>))}</select></div>
+                        <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={isSaving}>{isSaving ? 'Creando...' : 'Comenzar Auditoría 5S'}</button>
                     </form>
                 </div>
             </ProtectedRoute>
@@ -238,28 +237,17 @@ const Auditoria5SPage = () => {
         <ProtectedRoute allowedRoles={['administrador', 'auditor', 'colaborador']}>
             <div className="audit-page-container">
                 <div className="audit-page-header">
-                    <h1>Auditoría 5S en Curso</h1>
+                    <h1>Auditoría 5S: {formData.lugar}</h1>
                     <div style={{display: 'flex', gap: '10px'}}>
-                         <button onClick={() => saveAllProgress(false)} className="btn btn-secondary" disabled={isSaving}>
-                            {isSaving ? 'Guardando...' : 'Guardar Progreso'}
-                        </button>
-                        {/* Botón Salir/Volver al panel */}
-                         <button onClick={() => navigate('/dashboard')} className="btn btn-danger">
-                            Salir
-                        </button>
+                         <button onClick={() => saveAllProgress(false)} className="btn btn-secondary" disabled={isSaving}>{isSaving ? 'Guardando...' : 'Guardar Progreso'}</button>
+                         <button onClick={() => navigate('/audits/panel')} className="btn btn-danger">Salir</button>
                     </div>
                 </div>
-                <p><strong>Lugar:</strong> {formData.lugar} | <strong>Fecha:</strong> {new Date(formData.fecha).toLocaleDateString()}</p>
+                <p><strong>Fecha:</strong> {new Date(formData.fecha).toLocaleDateString()} | <strong>Auditor:</strong> {formData.auditor}</p>
                 
                 <div className="tabs">
                     {Object.keys(checklist).map(seccion => (
-                        <button 
-                            key={seccion}
-                            className={`tab-button ${activeTab === seccion ? 'active' : ''}`}
-                            onClick={() => setActiveTab(seccion)}
-                        >
-                            {seccion}
-                        </button>
+                        <button key={seccion} className={`tab-button ${activeTab === seccion ? 'active' : ''}`} onClick={() => setActiveTab(seccion)}>{seccion}</button>
                     ))}
                 </div>
                 
@@ -270,7 +258,7 @@ const Auditoria5SPage = () => {
                             item={item} 
                             seccion={activeTab} 
                             auditoriaId={currentAuditoriaId} 
-                            data={auditData[item.id] || {}} // Pasamos los datos del estado local
+                            data={auditData[item.id] || {}} 
                             onChange={handleItemChange}
                             onFileChange={handleFileChange}
                         />
@@ -281,9 +269,7 @@ const Auditoria5SPage = () => {
                     <h3>Resumen Parcial</h3>
                     <p>Porcentaje de Conformidad: <strong>{resultadoFinal.porcentaje}%</strong></p>
                     <p>Puntos Auditados: {resultadoFinal.total} / {totalItems}</p>
-                    <button onClick={() => saveAllProgress(true)} className="btn btn-primary" style={{width: '100%', marginTop: '1rem'}} disabled={isSaving}>
-                        Finalizar y Cerrar Auditoría
-                    </button>
+                    <button onClick={() => saveAllProgress(true)} className="btn btn-primary" style={{width: '100%', marginTop: '1rem'}} disabled={isSaving}>Finalizar y Guardar</button>
                 </div>
             </div>
         </ProtectedRoute>
