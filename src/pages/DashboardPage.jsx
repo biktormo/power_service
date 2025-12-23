@@ -246,18 +246,9 @@ const DashboardPage = () => {
                         <Link to={`/informe-grafico-5s/${selectedAudit5SId}`} className={`btn btn-secondary ${!selectedAudit5SId ? 'disabled' : ''}`}>
                             Ver Informe Gráfico
                         </Link>
-                        <button 
-                            className="btn btn-secondary" 
-                            onClick={() => {
-                                // Buscamos la auditoría seleccionada justo antes de exportar
-                                const selectedAuditToExport = audits5S.find(a => a.id === selectedAudit5SId);
-                                const checklist5SData = firebaseServices.get5SChecklist();
-                                exportToPDF5S(selectedAuditToExport, checklist5SData);
-                            }} 
-                            disabled={!selectedAudit5SId}
-                        >
-                            Exportar PDF Completo
-                        </button>
+                        <Link to={`/informe-5s/${selectedAudit5SId}`} className={`btn btn-secondary ${!selectedAudit5SId ? 'disabled' : ''}`}>
+                                Ver Informe Completo (Imprimible)
+                            </Link>
                     </div>
                 </div>
                 <div className="dashboard-filters">

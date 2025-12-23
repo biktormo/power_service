@@ -18,6 +18,7 @@ import PlanDeAccionDetailPage from './pages/PlanDeAccionDetailPage.jsx';
 import Auditoria5SPage from './pages/Auditoria5SPage.jsx';
 import InformeGraficoPage from './pages/InformeGraficoPage.jsx';
 import InformeInteractivoPage from './pages/InformeInteractivoPage.jsx';
+import Informe5SPage from './pages/Informe5SPage.jsx';
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
         <Route path="/auditoria-5s" element={<ProtectedRoute><Auditoria5SPage /></ProtectedRoute>} />
         <Route path="/informe-grafico-5s/:auditId" element={<ProtectedRoute><InformeGraficoPage /></ProtectedRoute>} />
         <Route path="/informe-interactivo/ps/:auditId" element={<ProtectedRoute><InformeInteractivoPage /></ProtectedRoute>} />
+        <Route path="/informe-5s/:auditId" element={<ProtectedRoute><Informe5SPage /></ProtectedRoute>} />
       </Routes>
     </>
   );

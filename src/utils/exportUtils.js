@@ -5,29 +5,34 @@ import autoTable from 'jspdf-autotable';
 import { utils, writeFile } from 'xlsx';
 import { PILARES_ORDER } from './ordering.js';
 
-// No es necesario el logo aquí, ya que lo pasaremos como parámetro si existe.
-// const logoBase64 = "data:image/png;base64,...";
+// Función auxiliar para convertir imágenes de URL a Base64 con múltiples intentos
+const imageToBase64 = async (url) => {
+    // Lista de proxies para intentar saltar CORS
+    const proxies = [
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`
+    ];
 
-// Función auxiliar para convertir imágenes de URL a Base64 para el PDF
-const imageToBase64 = (url) => {
-    return new Promise(async (resolve, reject) => {
+    for (const proxy of proxies) {
         try {
-            // Usamos un proxy CORS público. Para producción se recomienda uno propio.
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            const proxyUrl = proxy(url);
             const response = await fetch(proxyUrl);
-            if (!response.ok) {
-                throw new Error(`Network response was not ok: ${response.statusText}`);
-            }
+            if (!response.ok) throw new Error('Network response was not ok');
+            
             const blob = await response.blob();
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+            return await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
         } catch (error) {
-            console.error(`Error fetching image from ${url}:`, error);
-            reject(error);
+            console.warn(`Intento con proxy fallido para ${url}:`, error);
+            // Si falla, continuamos al siguiente proxy
         }
-    });
+    }
+    // Si todos fallan, lanzamos error
+    throw new Error(`No se pudo cargar la imagen desde ${url}`);
 };
 
 // --- FUNCIÓN PARA AUDITORÍAS PS ---
@@ -39,8 +44,11 @@ export const exportToPDF = async (audit, checklist, logoBase64) => {
 
     const doc = new jsPDF();
     if (logoBase64) {
-        doc.addImage(logoBase64, 'PNG', 150, 8, 45, 15);
+        try {
+           doc.addImage(logoBase64, 'PNG', 150, 8, 45, 15);
+        } catch (e) { console.error("Error añadiendo logo", e); }
     }
+    
     doc.setFontSize(18);
     doc.text(`Auditoría: ${audit.numeroAuditoria}`, 14, 22);
     doc.setFontSize(11);
@@ -72,32 +80,41 @@ export const exportToPDF = async (audit, checklist, logoBase64) => {
     autoTable(doc, { head: [tableColumns], body: tableData, startY: 60, styles: { fontSize: 8 }, headStyles: { fillColor: [52, 142, 68] } });
 
     const nonConformitiesWithEvidence = audit.resultados.filter(r => r.resultado === 'NC' && r.adjuntos && r.adjuntos.length > 0);
+    
     if (nonConformitiesWithEvidence.length > 0) {
         doc.addPage();
         doc.setFontSize(18);
-        doc.text("Anexo: Evidencias de No Conformidades (PS)", 14, 22);
+        doc.text("Anexo: Evidencias de No Conformidades", 14, 22);
         let currentY = 35;
+        
+        // Usamos un bucle for..of para manejar promesas secuencialmente
         for (const nc of nonConformitiesWithEvidence) {
             const reqData = checklist[nc.pilarId]?.estandares[nc.estandarId]?.requisitos.find(r => r.id === nc.requisitoId);
-            if (currentY > 250) { doc.addPage(); currentY = 22; }
+            
+            if (currentY > 240) { doc.addPage(); currentY = 22; }
+            
             doc.setFontSize(12); doc.setFont(undefined, 'bold');
             doc.text(`Requisito: ${nc.requisitoId}`, 14, currentY); currentY += 7;
+            
             doc.setFont(undefined, 'normal'); doc.setFontSize(10);
             const reqTextLines = doc.splitTextToSize(reqData?.requerimientoOperacional || 'Descripción no encontrada.', 180);
             doc.text(reqTextLines, 14, currentY); currentY += (reqTextLines.length * 5);
+            
             doc.setFont(undefined, 'italic');
-            const commentLines = doc.splitTextToSize(`Comentario del Auditor: "${nc.comentarios || 'Sin comentarios'}"`, 180);
+            const commentLines = doc.splitTextToSize(`Comentario: "${nc.comentarios || 'Sin comentarios'}"`, 180);
             doc.text(commentLines, 14, currentY); currentY += (commentLines.length * 5) + 5;
+            
             for (const file of nc.adjuntos) {
-                if (file.url.match(/\.(jpeg|jpg|gif|png)$/i)) {
+                if (file.url && file.url.match(/\.(jpeg|jpg|gif|png)$/i)) {
                     try {
                         const imgData = await imageToBase64(file.url);
-                        if (currentY + 60 > 280) { doc.addPage(); currentY = 22; }
+                        if (currentY + 70 > 280) { doc.addPage(); currentY = 22; }
+                        // Ajustamos el aspect ratio (simple)
                         doc.addImage(imgData, 'JPEG', 14, currentY, 80, 60);
-                        currentY += 70;
+                        currentY += 65;
                     } catch (error) {
-                        doc.text(`[Error al cargar imagen: ${file.name}]`, 14, currentY);
-                        currentY += 7;
+                        doc.text(`[No se pudo cargar la imagen]`, 14, currentY);
+                        currentY += 10;
                     }
                 }
             }
@@ -105,9 +122,9 @@ export const exportToPDF = async (audit, checklist, logoBase64) => {
         }
     }
     
-    let finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY : 60;
-    
-    if (finalY > 180 || nonConformitiesWithEvidence.length > 0) {
+    let finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || 60;
+    // Si la tabla terminó muy abajo, nueva página para el resumen
+    if (finalY > 200) {
         doc.addPage();
         finalY = 20;
     } else {
@@ -119,14 +136,19 @@ export const exportToPDF = async (audit, checklist, logoBase64) => {
         const conformes = audit.resultados.filter(r => r.resultado === 'C').length;
         const noConformes = audit.resultados.filter(r => r.resultado === 'NC').length;
         const noObservados = audit.resultados.filter(r => r.resultado === 'NO').length;
+        const ncCerradas = audit.resultados.filter(r => r.resultado === 'NC Cerrada').length; // Incluir NC Cerrada
+
         const pConformes = ((conformes / totalPuntosAuditados) * 100).toFixed(1);
         const pNoConformes = ((noConformes / totalPuntosAuditados) * 100).toFixed(1);
         const pNoObservados = ((noObservados / totalPuntosAuditados) * 100).toFixed(1);
+        const pNcCerradas = ((ncCerradas / totalPuntosAuditados) * 100).toFixed(1);
+
         doc.setFontSize(14); doc.text("Resumen de Resultados", 14, finalY); finalY += 10;
         doc.setFontSize(11);
         doc.text(`- Conformes (C): ${conformes} (${pConformes}%)`, 14, finalY); finalY += 7;
         doc.text(`- No Conformes (NC): ${noConformes} (${pNoConformes}%)`, 14, finalY); finalY += 7;
         doc.text(`- No Observados (NO): ${noObservados} (${pNoObservados}%)`, 14, finalY); finalY += 7;
+        doc.text(`- NC Cerradas: ${ncCerradas} (${pNcCerradas}%)`, 14, finalY); finalY += 7;
         doc.setFontSize(12); doc.text(`Total de Puntos Auditados: ${totalPuntosAuditados}`, 14, finalY);
     }
     
@@ -179,7 +201,7 @@ export const exportToPDF5S = async (audit, checklist5S, logoBase64) => {
 
     const doc = new jsPDF();
     if(logoBase64) {
-        doc.addImage(logoBase64, 'PNG', 150, 8, 45, 15);
+        try { doc.addImage(logoBase64, 'PNG', 150, 8, 45, 15); } catch(e) {}
     }
     doc.setFontSize(18);
     doc.text(`Auditoría 5S: ${audit.numeroAuditoria}`, 14, 22);
@@ -205,31 +227,36 @@ export const exportToPDF5S = async (audit, checklist5S, logoBase64) => {
     autoTable(doc, { head: [tableColumns], body: tableData, startY: 50, styles: { fontSize: 8 }, headStyles: { fillColor: [52, 142, 68] } });
 
     const nonConformitiesWithEvidence5S = audit.resultados.filter(r => r.resultado === 'No Conforme' && r.adjuntos && r.adjuntos.length > 0);
+    
     if (nonConformitiesWithEvidence5S.length > 0) {
         doc.addPage();
         doc.setFontSize(18);
         doc.text("Anexo: Evidencias de No Conformidades (5S)", 14, 22);
         let currentY = 35;
         for (const nc of nonConformitiesWithEvidence5S) {
-            if (currentY > 250) { doc.addPage(); currentY = 22; }
+            if (currentY > 240) { doc.addPage(); currentY = 22; }
+            
             doc.setFontSize(12); doc.setFont(undefined, 'bold');
             doc.text(`Ítem: ${nc.itemId} (${nc.seccion})`, 14, currentY); currentY += 7;
+            
             doc.setFont(undefined, 'normal'); doc.setFontSize(10);
             const itemTextLines = doc.splitTextToSize(nc.itemTexto, 180);
             doc.text(itemTextLines, 14, currentY); currentY += (itemTextLines.length * 5);
+            
             doc.setFont(undefined, 'italic');
             const commentLines = doc.splitTextToSize(`Comentario: "${nc.comentarios || 'Sin comentarios'}"`, 180);
             doc.text(commentLines, 14, currentY); currentY += (commentLines.length * 5) + 5;
+            
             for (const file of nc.adjuntos) {
                 if (file.url && file.url.match(/\.(jpeg|jpg|gif|png)$/i)) {
                     try {
                         const imgData = await imageToBase64(file.url);
-                        if (currentY + 60 > 280) { doc.addPage(); currentY = 22; }
+                        if (currentY + 70 > 280) { doc.addPage(); currentY = 22; }
                         doc.addImage(imgData, 'JPEG', 14, currentY, 80, 60);
-                        currentY += 70;
+                        currentY += 65;
                     } catch (error) {
-                        doc.text(`[Error al cargar imagen: ${file.name}]`, 14, currentY);
-                        currentY += 7;
+                        doc.text(`[Error al cargar imagen]`, 14, currentY);
+                        currentY += 10;
                     }
                 }
             }
@@ -238,34 +265,28 @@ export const exportToPDF5S = async (audit, checklist5S, logoBase64) => {
     }
 
     let finalY_5S = (doc.lastAutoTable && doc.lastAutoTable.finalY) || 50;
-
-    if (finalY_5S > 180 || nonConformitiesWithEvidence5S.length > 0) {
+    if (finalY_5S > 200) {
         doc.addPage();
         finalY_5S = 20;
     } else {
         finalY_5S += 20;
     }
 
-    const auditados = audit.resultados.filter(r => r.resultado === 'Conforme' || r.resultado === 'No Conforme');
+    const auditados = audit.resultados.filter(r => r.resultado === 'Conforme' || r.resultado === 'No Conforme' || r.resultado === 'NC Cerrada');
     if (auditados.length > 0) {
         const conformes = auditados.filter(r => r.resultado === 'Conforme').length;
-        const noConformes = auditados.length - conformes;
-        const porcentaje = ((conformes / auditados.length) * 100).toFixed(1);
+        const noConformes = auditados.filter(r => r.resultado === 'No Conforme').length;
+        const ncCerradas = auditados.filter(r => r.resultado === 'NC Cerrada').length;
+        
+        const porcentaje = ((conformes + ncCerradas) / auditados.length * 100).toFixed(1); // NC Cerrada cuenta como conforme para el porcentaje? Asumimos que sí, o la lógica que prefieras.
 
-        doc.setFontSize(14);
-        doc.text("Resumen de Resultados 5S", 14, finalY_5S);
-        finalY_5S += 10;
-        
-        doc.setFontSize(12);
-        doc.text(`Porcentaje de Conformidad: ${porcentaje}%`, 14, finalY_5S);
-        finalY_5S += 10;
-        
+        doc.setFontSize(14); doc.text("Resumen de Resultados 5S", 14, finalY_5S); finalY_5S += 10;
+        doc.setFontSize(12); doc.text(`Porcentaje de Conformidad: ${porcentaje}%`, 14, finalY_5S); finalY_5S += 10;
         doc.setFontSize(11);
-        doc.text(`- Puntos Auditados: ${auditados.length}`, 14, finalY_5S);
-        finalY_5S += 7;
-        doc.text(`- Conformes: ${conformes}`, 14, finalY_5S);
-        finalY_5S += 7;
-        doc.text(`- No Conformes: ${noConformes}`, 14, finalY_5S);
+        doc.text(`- Puntos Auditados: ${auditados.length}`, 14, finalY_5S); finalY_5S += 7;
+        doc.text(`- Conformes: ${conformes}`, 14, finalY_5S); finalY_5S += 7;
+        doc.text(`- No Conformes: ${noConformes}`, 14, finalY_5S); finalY_5S += 7;
+        doc.text(`- NC Cerradas: ${ncCerradas}`, 14, finalY_5S);
     }
     
     finalY_5S += 40;
