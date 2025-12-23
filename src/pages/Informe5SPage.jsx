@@ -111,7 +111,7 @@ const Informe5SPage = () => {
                         <h3 style={{ borderBottom: '2px solid var(--primary-color)', paddingBottom: '0.5rem', color: 'var(--primary-color)' }}>{seccion}</h3>
                         {items.map(item => {
                             const result = audit.resultados.find(r => r.itemId === item.id);
-                            const statusColor = result ? COLORS[result.resultado] || '#6c757d' : '#6c757d';
+                            const statusColor = result ? COLORS[result.resultado] || '#333' : '#333';
                             
                             return (
                                 <div key={item.id} style={{ 
@@ -123,7 +123,8 @@ const Informe5SPage = () => {
                                     pageBreakInside: 'avoid' // Intenta no cortar el ítem entre páginas
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                        <strong>{item.id}. {item.text}</strong>
+                                    {/* AÑADIDO color: '#212529' para asegurar que sea oscuro */}
+                                        <strong style={{ color: '#212529' }}>{item.id}. {item.text}</strong>
                                         <span style={{ fontWeight: 'bold', color: statusColor }}>{result?.resultado || 'Pendiente'}</span>
                                     </div>
                                     
