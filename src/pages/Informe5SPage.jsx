@@ -144,33 +144,35 @@ const Informe5SPage = () => {
                                                             <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
                                                                 
                                                                 {/* IMAGEN MINIATURA (Visible en Pantalla y PDF) */}
-                                                                {file.url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
+                                                                {(file.url.toLowerCase().includes('alt=media') || file.name.match(/\.(jpeg|jpg|gif|png|webp)$/i)) ? (
                                                                     <img 
                                                                         src={file.url} 
                                                                         alt="Evidencia" 
                                                                         style={{ 
-                                                                            width: '120px', 
-                                                                            height: '90px', 
+                                                                            width: '240px',   // <-- DUPLICADO (antes 120px)
+                                                                            height: '180px',  // <-- DUPLICADO (antes 90px)
                                                                             objectFit: 'cover', 
-                                                                            borderRadius: '4px', 
+                                                                            borderRadius: '8px', 
                                                                             border: '1px solid #ccc',
-                                                                            display: 'block', // Asegura que no tenga espacio extra abajo
-                                                                            marginBottom: '4px'
+                                                                            display: 'block',
+                                                                            marginBottom: '8px'
                                                                         }} 
                                                                     />
                                                                 ) : (
-                                                                    // Icono genérico para archivos no imagen
+                                                                    // Icono genérico (también más grande)
                                                                     <div style={{ 
-                                                                        width: '120px', 
-                                                                        height: '90px', 
+                                                                        width: '240px', 
+                                                                        height: '180px', 
                                                                         display: 'flex', 
                                                                         alignItems: 'center', 
                                                                         justifyContent: 'center', 
                                                                         border: '1px solid #ccc', 
-                                                                        borderRadius: '4px',
-                                                                        backgroundColor: '#f9f9f9'
+                                                                        borderRadius: '8px',
+                                                                        backgroundColor: '#f9f9f9',
+                                                                        fontSize: '2rem',
+                                                                        color: '#ccc'
                                                                     }}>
-                                                                        📄 Archivo
+                                                                        📄
                                                                     </div>
                                                                 )}
                                                                 
