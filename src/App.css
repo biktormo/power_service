@@ -478,9 +478,20 @@ h1, h2, h3, h4 {
   border-color: var(--primary-color);
 }
 
-/* Ocultamos el header y botón al imprimir esta vista */
 @media print {
-    .header, .report-header button {
-        display: none !important;
-    }
+  .header, .no-print {
+    display: none !important;
+  }
+  .app-container {
+    height: auto;
+    overflow: visible;
+  }
+  body {
+    background-color: white;
+  }
+  .report-container {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
 }

@@ -134,20 +134,56 @@ const Informe5SPage = () => {
                                     )}
 
                                     {/* EVIDENCIAS (FOTOS) */}
-                                    {result?.adjuntos?.length > 0 && (
-                                        <div style={{ marginTop: '1rem' }}>
-                                            <strong>Evidencias:</strong>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '0.5rem' }}>
-                                                {result.adjuntos.map((file, idx) => (
-                                                    file.url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                                                        <img key={idx} src={file.url} alt="Evidencia" style={{ width: '150px', height: '100px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd' }} />
-                                                    ) : (
-                                                        <a key={idx} href={file.url} target="_blank" rel="noopener noreferrer">Ver Archivo</a>
-                                                    )
-                                                ))}
+                                        {result?.adjuntos?.length > 0 && (
+                                            <div style={{ marginTop: '1rem' }}>
+                                                <strong>Evidencias:</strong>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginTop: '0.5rem' }}>
+                                                    {result.adjuntos.map((file, idx) => (
+                                                        <div key={idx} style={{ textAlign: 'center' }}>
+                                                            {/* ENLACE QUE ENVUELVE LA IMAGEN */}
+                                                            <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', color: 'inherit' }}>
+                                                                
+                                                                {/* IMAGEN MINIATURA (Visible en Pantalla y PDF) */}
+                                                                {file.url.match(/\.(jpeg|jpg|gif|png)$/i) ? (
+                                                                    <img 
+                                                                        src={file.url} 
+                                                                        alt="Evidencia" 
+                                                                        style={{ 
+                                                                            width: '120px', 
+                                                                            height: '90px', 
+                                                                            objectFit: 'cover', 
+                                                                            borderRadius: '4px', 
+                                                                            border: '1px solid #ccc',
+                                                                            display: 'block', // Asegura que no tenga espacio extra abajo
+                                                                            marginBottom: '4px'
+                                                                        }} 
+                                                                    />
+                                                                ) : (
+                                                                    // Icono genérico para archivos no imagen
+                                                                    <div style={{ 
+                                                                        width: '120px', 
+                                                                        height: '90px', 
+                                                                        display: 'flex', 
+                                                                        alignItems: 'center', 
+                                                                        justifyContent: 'center', 
+                                                                        border: '1px solid #ccc', 
+                                                                        borderRadius: '4px',
+                                                                        backgroundColor: '#f9f9f9'
+                                                                    }}>
+                                                                        📄 Archivo
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                {/* TEXTO "VER IMAGEN" (Para claridad) */}
+                                                                <span style={{ fontSize: '0.8em', color: 'var(--primary-color)', textDecoration: 'underline' }}>
+                                                                    Ver original
+                                                                </span>
+                                                            </a>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
                                 </div>
                             );
                         })}
