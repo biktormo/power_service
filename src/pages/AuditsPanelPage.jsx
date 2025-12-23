@@ -7,14 +7,10 @@ import { toast } from 'react-hot-toast';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
 
 const AuditsPanelPage = () => {
-    const [activeTab, setActiveTab] = useState('PS'); // 'PS' o '5S'
+    const [activeTab, setActiveTab] = useState('PS');
     const [loading, setLoading] = useState(true);
-    
-    // Estados para PS
     const [auditsPS, setAuditsPS] = useState([]);
     const [totalRequisitosPS, setTotalRequisitosPS] = useState(0);
-
-    // Estados para 5S
     const [audits5S, setAudits5S] = useState([]);
     const [totalItems5S, setTotalItems5S] = useState(0);
 
@@ -22,14 +18,7 @@ const AuditsPanelPage = () => {
 
     useEffect(() => {
         const fetchAllData = async () => {
-            const cachedData = getCachedData();
-            if (cachedData) {
-                setAuditsPS(cachedData.audits || []);
-                setTotalRequisitosPS(cachedData.totalRequisitos || 0);
-                // Si tuviéramos auditorías 5S en caché, las setearíamos aquí
-                setLoading(false);
-            }
-
+            setLoading(true);
             try {
                 // 1. Cargar Auditorías PS
                 const allAuditsPS = await firebaseServices.getAllAuditsWithResults();
@@ -53,14 +42,11 @@ const AuditsPanelPage = () => {
                 setAudits5S(allAudits5S);
                 setTotalItems5S(count5S);
 
-                // Actualizar Caché (Opcional, si quisieras guardar también las 5S)
-                // setCachedData({ ...cachedData, audits: allAuditsPS, audits5S: allAudits5S });
-
             } catch (error) {
                 toast.error("Error al cargar los datos.");
                 console.error(error);
             } finally {
-                if (!cachedData) setLoading(false);
+                setLoading(false);
             }
         };
         fetchAllData();
@@ -79,7 +65,6 @@ const AuditsPanelPage = () => {
             <div className="audits-panel-container">
                 <h1>Panel de Auditorías</h1>
                 
-                {/* PESTAÑAS DE FILTRO */}
                 <div className="tabs">
                     <button className={`tab-button ${activeTab === 'PS' ? 'active' : ''}`} onClick={() => setActiveTab('PS')}>
                         Auditorías Power Service
@@ -105,7 +90,6 @@ const AuditsPanelPage = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {/* --- TABLA PS --- */}
                             {activeTab === 'PS' && auditsPS.map(audit => {
                                 const progress = totalRequisitosPS > 0 ? (audit.resultados.length / totalRequisitosPS) * 100 : 0;
                                 return (
@@ -136,9 +120,7 @@ const AuditsPanelPage = () => {
                                 );
                             })}
 
-                            {/* --- TABLA 5S --- */}
                             {activeTab === '5S' && audits5S.map(audit => {
-                                // Calculamos progreso contando resultados únicos
                                 const itemsAuditados = audit.resultados ? audit.resultados.length : 0;
                                 const progress = totalItems5S > 0 ? (itemsAuditados / totalItems5S) * 100 : 0;
                                 
@@ -147,8 +129,6 @@ const AuditsPanelPage = () => {
                                         <td>{audit.numeroAuditoria}</td>
                                         <td>{audit.lugar}</td>
                                         <td>{audit.auditor}</td>
-                                        {/* Columnas vacías para mantener alineación si es necesario */}
-                                        
                                         <td>
                                             <span>{itemsAuditados} / {totalItems5S}</span>
                                             <div className="progress-bar">
@@ -157,14 +137,12 @@ const AuditsPanelPage = () => {
                                         </td>
                                         <td>{audit.creadoEn?.toDate().toLocaleDateString()}</td>
                                         <td>
-                                            {/* Asumimos que 5S siempre está "abierta" hasta que se finaliza, 
-                                                o podríamos añadir un campo de estado en el futuro */}
                                             <span className="status-badge status-en_progreso">En Progreso</span>
                                         </td>
                                         <td>
-                                        <button className="btn btn-primary" onClick={() => navigate(`/auditoria-5s/${audit.id}`)}>
-                                            Continuar
-                                        </button>
+                                            <button className="btn btn-primary" onClick={() => navigate(`/auditoria-5s/${audit.id}`)}>
+                                                Continuar
+                                            </button>
                                         </td>
                                     </tr>
                                 );
@@ -172,7 +150,6 @@ const AuditsPanelPage = () => {
                         </tbody>
                     </table>
                     
-                    {/* Mensajes de "Sin datos" */}
                     {activeTab === 'PS' && auditsPS.length === 0 && <p style={{padding: '1rem', textAlign: 'center'}}>No hay auditorías Power Service registradas.</p>}
                     {activeTab === '5S' && audits5S.length === 0 && <p style={{padding: '1rem', textAlign: 'center'}}>No hay auditorías 5S registradas.</p>}
                 </div>
