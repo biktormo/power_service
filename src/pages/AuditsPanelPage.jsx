@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { firebaseServices } from '../firebase/services';
 import { toast } from 'react-hot-toast';
 import ProtectedRoute from '../components/ProtectedRoute.jsx';
-import { getCachedData, setCachedData } from '../utils/dataCache.js';
 
 const AuditsPanelPage = () => {
     const [activeTab, setActiveTab] = useState('PS'); // 'PS' o '5S'
