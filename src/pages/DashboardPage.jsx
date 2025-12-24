@@ -34,28 +34,27 @@ const DashboardPage = () => {
         const loadData = async () => {
             setLoading(true);
             try {
-                // --- OPTIMIZACIÓN: CARGA PARALELA ---
-                const [auditsData, plansData, checklistData, pilaresData, audits5SData] = await Promise.all([
-                    firebaseServices.getAllAuditsWithResults(),
-                    firebaseServices.getAllActionPlans(),
-                    firebaseServices.getFullChecklist(),
-                    firebaseServices.getChecklistData(['checklist']),
-                    firebaseServices.getAllAuditorias5SWithResults()
+                // Cargamos cada parte de forma independiente para que un fallo no bloquee todo
+                const auditsPromise = firebaseServices.getAllAuditsWithResults().catch(e => { console.error("Error audits:", e); return []; });
+                const plansPromise = firebaseServices.getAllActionPlans().catch(e => { console.error("Error plans:", e); return []; });
+                const checklistPromise = firebaseServices.getFullChecklist().catch(e => { console.error("Error checklist:", e); return {}; });
+                const pilaresPromise = firebaseServices.getChecklistData(['checklist']).catch(e => { console.error("Error pilares:", e); return []; });
+                const audits5SPromise = firebaseServices.getAllAuditorias5SWithResults().catch(e => { console.error("Error audits 5S:", e); return []; });
+    
+                const [audits, plans, checklist, pilares, audits5SData] = await Promise.all([
+                    auditsPromise, plansPromise, checklistPromise, pilaresPromise, audits5SPromise
                 ]);
-
-                // Procesamiento
-                const results = auditsData.flatMap(a => a.resultados.map(r => ({ ...r, lugar: a.lugar, fechaCreacion: a.fechaCreacion })));
-
-                // Actualización de Estados
-                setAllAudits(auditsData);
+    
+                const results = audits.flatMap(a => a.resultados.map(r => ({ ...r, lugar: a.lugar, fechaCreacion: a.fechaCreacion })));
+    
+                setAllAudits(audits);
                 setAllResults(results);
-                setActionPlans(plansData);
-                setFullChecklist(checklistData);
-                setPilaresList(pilaresData);
+                setActionPlans(plans);
+                setFullChecklist(checklist);
+                setPilaresList(pilares);
                 setAudits5S(audits5SData);
-
             } catch (error) {
-                toast.error("Error al cargar los datos del dashboard.");
+                toast.error("Error parcial al cargar el dashboard.");
                 console.error(error);
             } finally {
                 setLoading(false);

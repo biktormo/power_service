@@ -21,38 +21,54 @@ const AuditsPanelPage = () => {
     useEffect(() => {
         const fetchAllData = async () => {
             setLoading(true);
+            
+            // Definimos valores por defecto por si algo falla
+            let auditsPSData = [];
+            let totalReqsPS = 0;
+            let audits5SData = [];
+            let totalItems5SData = 0;
+    
             try {
-                // --- OPTIMIZACIÓN: CARGA PARALELA ---
-                // Lanzamos todas las peticiones a la vez y esperamos a que todas terminen
-                const [allAuditsPS, checklistPS, allAudits5S] = await Promise.all([
-                    firebaseServices.getAllAuditsWithResults(),
-                    firebaseServices.getFullChecklist(),
-                    firebaseServices.getAllAuditorias5SWithResults()
-                ]);
-
-                const checklist5S = firebaseServices.get5SChecklist(); // Esta es síncrona (rápida)
-
-                // Procesamos datos PS
-                let countPS = 0;
-                if (checklistPS) {
-                    Object.values(checklistPS).forEach(pilar => {
-                        Object.values(pilar.estandares).forEach(estandar => {
-                            countPS += estandar.requisitos.length;
+                // 1. Intentamos cargar PS
+                try {
+                    const audits = await firebaseServices.getAllAuditsWithResults();
+                    auditsPSData = audits;
+                    
+                    const checklist = await firebaseServices.getFullChecklist();
+                    if (checklist) {
+                        Object.values(checklist).forEach(pilar => {
+                            Object.values(pilar.estandares).forEach(estandar => {
+                                totalReqsPS += estandar.requisitos.length;
+                            });
                         });
-                    });
+                    }
+                } catch (e) {
+                    console.error("Error cargando datos PS:", e);
+                    toast.error("Error al cargar auditorías PS");
                 }
-                setAuditsPS(allAuditsPS);
-                setTotalRequisitosPS(countPS);
-
-                // Procesamos datos 5S
-                const count5S = Object.values(checklist5S).reduce((sum, items) => sum + items.length, 0);
-                setAudits5S(allAudits5S);
-                setTotalItems5S(count5S);
-
+    
+                // 2. Intentamos cargar 5S
+                try {
+                    const audits5S = await firebaseServices.getAllAuditorias5SWithResults();
+                    audits5SData = audits5S;
+    
+                    const checklist5S = firebaseServices.get5SChecklist();
+                    totalItems5SData = Object.values(checklist5S).reduce((sum, items) => sum + items.length, 0);
+                } catch (e) {
+                    console.error("Error cargando datos 5S:", e);
+                    toast.error("Error al cargar auditorías 5S");
+                }
+    
+                // 3. Actualizamos el estado con lo que hayamos conseguido
+                setAuditsPS(auditsPSData);
+                setTotalRequisitosPS(totalReqsPS);
+                setAudits5S(audits5SData);
+                setTotalItems5S(totalItems5SData);
+    
             } catch (error) {
-                toast.error("Error al cargar los datos.");
-                console.error(error);
+                console.error("Error general en el panel:", error);
             } finally {
+                // ESTO SE EJECUTA SIEMPRE, GARANTIZANDO QUE EL LOADING DESAPAREZCA
                 setLoading(false);
             }
         };
