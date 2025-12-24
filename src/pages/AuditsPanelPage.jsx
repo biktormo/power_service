@@ -9,8 +9,10 @@ import ProtectedRoute from '../components/ProtectedRoute.jsx';
 const AuditsPanelPage = () => {
     const [activeTab, setActiveTab] = useState('PS');
     const [loading, setLoading] = useState(true);
+    
     const [auditsPS, setAuditsPS] = useState([]);
     const [totalRequisitosPS, setTotalRequisitosPS] = useState(0);
+
     const [audits5S, setAudits5S] = useState([]);
     const [totalItems5S, setTotalItems5S] = useState(0);
 
@@ -20,9 +22,17 @@ const AuditsPanelPage = () => {
         const fetchAllData = async () => {
             setLoading(true);
             try {
-                // 1. Cargar Auditorías PS
-                const allAuditsPS = await firebaseServices.getAllAuditsWithResults();
-                const checklistPS = await firebaseServices.getFullChecklist();
+                // --- OPTIMIZACIÓN: CARGA PARALELA ---
+                // Lanzamos todas las peticiones a la vez y esperamos a que todas terminen
+                const [allAuditsPS, checklistPS, allAudits5S] = await Promise.all([
+                    firebaseServices.getAllAuditsWithResults(),
+                    firebaseServices.getFullChecklist(),
+                    firebaseServices.getAllAuditorias5SWithResults()
+                ]);
+
+                const checklist5S = firebaseServices.get5SChecklist(); // Esta es síncrona (rápida)
+
+                // Procesamos datos PS
                 let countPS = 0;
                 if (checklistPS) {
                     Object.values(checklistPS).forEach(pilar => {
@@ -34,11 +44,8 @@ const AuditsPanelPage = () => {
                 setAuditsPS(allAuditsPS);
                 setTotalRequisitosPS(countPS);
 
-                // 2. Cargar Auditorías 5S
-                const allAudits5S = await firebaseServices.getAllAuditorias5SWithResults();
-                const checklist5S = firebaseServices.get5SChecklist();
+                // Procesamos datos 5S
                 const count5S = Object.values(checklist5S).reduce((sum, items) => sum + items.length, 0);
-                
                 setAudits5S(allAudits5S);
                 setTotalItems5S(count5S);
 
