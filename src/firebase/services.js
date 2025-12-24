@@ -336,22 +336,44 @@ export const firebaseServices = {
     },
 
     getAllAuditorias5SWithResults: async () => {
-        const auditsQuery = query(collection(db, 'auditorias5S'), orderBy('creadoEn', 'desc'));
-        const auditsSnapshot = await getDocs(auditsQuery);
-        const audits = auditsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        try {
+            const auditsQuery = query(collection(db, 'auditorias5S'), orderBy('creadoEn', 'desc'));
+            const auditsSnapshot = await getDocs(auditsQuery);
+            
+            // Mapeamos los datos con protección contra errores
+            const audits = auditsSnapshot.docs.map(doc => {
+                const data = doc.data();
+                // Si falta la fecha, usamos la fecha actual como fallback para no romper la app
+                return { 
+                    id: doc.id, 
+                    ...data,
+                    creadoEn: data.creadoEn || serverTimestamp() 
+                };
+            });
     
-        const resultsQuery = query(collection(db, 'resultados5S'));
-        const resultsSnapshot = await getDocs(resultsQuery);
-        const resultsByAudit = {};
-        resultsSnapshot.forEach(doc => {
-            const result = { id: doc.id, ...doc.data() };
-            if (!resultsByAudit[result.auditoria5SId]) {
-                resultsByAudit[result.auditoria5SId] = [];
-            }
-            resultsByAudit[result.auditoria5SId].push(result);
-        });
+            const resultsQuery = query(collection(db, 'resultados5S'));
+            const resultsSnapshot = await getDocs(resultsQuery);
+            const resultsByAudit = {};
+            
+            resultsSnapshot.forEach(doc => {
+                const result = { id: doc.id, ...doc.data() };
+                // Solo procesamos si tiene un ID de auditoría válido
+                if (result.auditoria5SId) {
+                    if (!resultsByAudit[result.auditoria5SId]) {
+                        resultsByAudit[result.auditoria5SId] = [];
+                    }
+                    resultsByAudit[result.auditoria5SId].push(result);
+                }
+            });
     
-        return audits.map(audit => ({ ...audit, resultados: resultsByAudit[audit.id] || [] }));
+            return audits.map(audit => ({ 
+                ...audit, 
+                resultados: resultsByAudit[audit.id] || [] 
+            }));
+        } catch (error) {
+            console.error("Error crítico en getAllAuditorias5SWithResults:", error);
+            return []; // Devolvemos array vacío en lugar de romper
+        }
     },
 
     getAuditoria5SWithResults: async (auditId) => {
